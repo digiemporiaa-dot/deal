@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+.env
+.env*.local
+*.log
+npm-debug.log*
+.DS_Store
+coverage
+next-env.d.ts
+/prisma/dev.db
+.vercel
+
+# Uploaded media (keep the folder, ignore its contents)
+/public/uploads/*
+!/public/uploads/.gitkeep

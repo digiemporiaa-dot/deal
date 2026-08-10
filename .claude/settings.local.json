@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(git --version)",
+      "Bash(psql --version)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(timeout 40 npx next build)",
+      "PowerShell(\\(Get-Command winget,choco,scoop -ErrorAction SilentlyContinue\\) | Select-Object Name,Source; Write-Output '--- existing pg installs ---'; Get-ChildItem 'C:\\\\Program Files\\\\PostgreSQL' -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('base64'\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"server still up: HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/)"
+    ]
+  }
+}
