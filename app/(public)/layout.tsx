@@ -10,7 +10,7 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <EnquiryProvider>
       <div className="flex min-h-screen flex-col">
-        <Header siteName={settings.siteName} />
+        <Header siteName={settings.siteName} links={settings.navigation.headerLinks} />
         <main className="flex-1">{children}</main>
         <Footer settings={settings} />
       </div>
