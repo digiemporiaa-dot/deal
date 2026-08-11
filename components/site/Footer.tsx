@@ -33,7 +33,7 @@ export function Footer({ settings }: { settings: SiteSettings }) {
         <FooterCol title="Support" links={[
           { href: "/contact", label: "Contact" },
           { href: "/packages", label: "Book a Trip" },
-          { href: "/admin/login", label: "Admin Login" },
+         
         ]} />
 
         <div>
