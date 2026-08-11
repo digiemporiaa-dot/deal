@@ -497,6 +497,7 @@ model Page {
   seoTitle       String?
   seoDescription String?
   ogImage        String?
+  sections       String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   faqs           Faq[]
