@@ -17,6 +17,10 @@ const pageSchema = z.object({
   status: z.enum(["DRAFT", "PUBLISHED"]).default("PUBLISHED"),
   seoTitle: z.string().max(160).optional().or(z.literal("")),
   seoDescription: z.string().max(300).optional().or(z.literal("")),
+  ogImage: z.string().optional().or(z.literal("")),
+  faqs: z
+    .array(z.object({ question: z.string(), answer: z.string() }))
+    .default([]),
 });
 
 export type PageInput = z.infer<typeof pageSchema>;
@@ -49,7 +53,12 @@ export async function savePage(input: PageInput, id?: string): Promise<ActionRes
     status: d.status,
     seoTitle: d.seoTitle || null,
     seoDescription: d.seoDescription || null,
+    ogImage: d.ogImage || null,
   };
+
+  const faqs = d.faqs
+    .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
+    .filter((f) => f.question && f.answer);
 
   try {
     if (id) {
@@ -57,6 +66,13 @@ export async function savePage(input: PageInput, id?: string): Promise<ActionRes
     } else {
       const created = await prisma.page.create({ data });
       id = created.id;
+    }
+    // Replace the page's FAQs with the submitted list.
+    await prisma.faq.deleteMany({ where: { pageId: id } });
+    if (faqs.length > 0) {
+      await prisma.faq.createMany({
+        data: faqs.map((f, i) => ({ ...f, pageId: id!, sortOrder: i, published: true })),
+      });
     }
     revalidatePath("/admin/pages");
     revalidatePath(`/${slug}`);
@@ -80,4 +96,3 @@ export async function deletePage(id: string): Promise<ActionResult> {
     return { ok: false, error: "Something went wrong while deleting the page." };
   }
 }
-
