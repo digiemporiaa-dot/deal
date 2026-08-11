@@ -6,16 +6,10 @@ import { Menu, X, Plane } from "lucide-react";
 import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { href: "/", label: "Home" },
-  { href: "/destinations", label: "Destinations" },
-  { href: "/packages", label: "Packages" },
-  { href: "/about", label: "About" },
-  { href: "/blog", label: "Blog" },
-  { href: "/contact", label: "Contact" },
-];
+type NavLink = { label: string; href: string };
 
-export function Header({ siteName }: { siteName: string }) {
+export function Header({ siteName, links }: { siteName: string; links: NavLink[] }) {
+  const NAV = links;
   const [open, setOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
 
