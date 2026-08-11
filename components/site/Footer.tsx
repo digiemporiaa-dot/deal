@@ -23,18 +23,9 @@ export function Footer({ settings }: { settings: SiteSettings }) {
           </div>
         </div>
 
-        <FooterCol title="Explore" links={[
-          { href: "/destinations", label: "Destinations" },
-          { href: "/packages", label: "Packages" },
-          { href: "/blog", label: "Travel Blog" },
-          { href: "/about", label: "About Us" },
-        ]} />
+        <FooterCol title={settings.navigation.footerExploreTitle} links={settings.navigation.footerExploreLinks} />
 
-        <FooterCol title="Support" links={[
-          { href: "/contact", label: "Contact" },
-          { href: "/packages", label: "Book a Trip" },
-         
-        ]} />
+        <FooterCol title={settings.navigation.footerSupportTitle} links={settings.navigation.footerSupportLinks} />
 
         <div>
           <h4 className="text-sm font-semibold text-slate-900">Get in touch</h4>
