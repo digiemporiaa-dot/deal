@@ -50,7 +50,7 @@ export default async function CmsPage({ params }: Params) {
       ? {
           "@context": "https://schema.org",
           "@type": "FAQPage",
-          mainEntity: page.faqs.map((f) => ({
+          mainEntity: page.faqs.map((f: { question: string; answer: string }) => ({
             "@type": "Question",
             name: f.question,
             acceptedAnswer: { "@type": "Answer", text: f.answer },
