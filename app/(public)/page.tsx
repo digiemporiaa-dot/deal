@@ -172,10 +172,13 @@ export default async function HomePage() {
       {/* CTA */}
       <section className="container-page pb-20">
         <div className="relative overflow-hidden rounded-3xl bg-brand-600 px-8 py-14 text-center text-white">
-          <h2 className="mx-auto max-w-2xl text-3xl font-bold sm:text-4xl">Ready to start your next adventure?</h2>
-          <p className="mx-auto mt-3 max-w-xl text-white/85">
-            Tell us your dream destination and our experts will craft a personalised plan — free of charge.
-          </p>
+  <h2 className="mx-auto max-w-2xl text-3xl font-bold sm:text-4xl">
+    Ready to start your next adventure?
+  </h2>
+
+  <p className="mx-auto mt-3 max-w-xl text-white/85">
+    Tell us your dream destination and our experts will craft a personalised plan — free of charge.
+  </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <EnquiryButton label="Get a Free Quote" title="Get a Free Quote" size="lg" variant="secondary" />
             <LinkButton href="/packages" size="lg" variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10">
