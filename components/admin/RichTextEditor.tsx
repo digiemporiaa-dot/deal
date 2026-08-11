@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bold, Italic, List, ListOrdered, Heading2, Link2, Image as ImageIcon, Undo, Redo } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Link2, Image as ImageIcon, Undo, Redo } from "lucide-react";
 
 /**
  * Lightweight rich-text editor built on a contentEditable surface. It emits
@@ -38,7 +38,25 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-1.5">
         <button type="button" className={btn} onClick={() => exec("bold")} title="Bold"><Bold className="h-4 w-4" /></button>
         <button type="button" className={btn} onClick={() => exec("italic")} title="Italic"><Italic className="h-4 w-4" /></button>
-        <button type="button" className={btn} onClick={() => exec("formatBlock", "<h2>")} title="Heading"><Heading2 className="h-4 w-4" /></button>
+        <select
+          className="h-8 rounded-md border border-slate-300 bg-white px-1.5 text-xs text-slate-700"
+          defaultValue=""
+          title="Heading level"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v) exec("formatBlock", v);
+            e.target.value = "";
+          }}
+        >
+          <option value="" disabled>Heading</option>
+          <option value="<p>">Paragraph</option>
+          <option value="<h1>">H1</option>
+          <option value="<h2>">H2</option>
+          <option value="<h3>">H3</option>
+          <option value="<h4>">H4</option>
+          <option value="<h5>">H5</option>
+          <option value="<h6>">H6</option>
+        </select>
         <button type="button" className={btn} onClick={() => exec("insertUnorderedList")} title="Bullet list"><List className="h-4 w-4" /></button>
         <button type="button" className={btn} onClick={() => exec("insertOrderedList")} title="Numbered list"><ListOrdered className="h-4 w-4" /></button>
         <button
@@ -46,7 +64,19 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
           className={btn}
           onClick={() => {
             const url = prompt("Enter URL");
-            if (url) exec("createLink", url);
+            if (!url) return;
+            const nofollow = confirm(
+              "Should this link be NOFOLLOW?\n\nOK = nofollow (external/untrusted sites)\nCancel = follow (normal link)",
+            );
+            exec("createLink", url);
+            // Apply rel/target to the link(s) just created.
+            if (ref.current) {
+              ref.current.querySelectorAll(`a[href="${CSS.escape(url)}"]`).forEach((a) => {
+                if (nofollow) a.setAttribute("rel", "nofollow noopener");
+                else a.removeAttribute("rel");
+              });
+              onChange(ref.current.innerHTML);
+            }
           }}
           title="Insert link"
         >
