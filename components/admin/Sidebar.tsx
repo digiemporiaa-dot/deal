@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Package, MapPin, CalendarCheck, Users, MessageSquare,
-  Star, FileText, Tag, Image as ImageIcon, Settings, UserCog, Menu, X, Plane, LogOut, ClipboardList,
+  Star, FileText, Files, Tag, Image as ImageIcon, Settings, UserCog, Menu, X, Plane, LogOut, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/admin/leads", label: "Leads", icon: ClipboardList },
   { href: "/admin/testimonials", label: "Testimonials", icon: Star },
   { href: "/admin/blogs", label: "Blogs", icon: FileText },
+  { href: "/admin/pages", label: "Pages", icon: Files },
   { href: "/admin/coupons", label: "Coupons", icon: Tag },
   { href: "/admin/media", label: "Media", icon: ImageIcon },
   { href: "/admin/settings", label: "Settings", icon: Settings },
