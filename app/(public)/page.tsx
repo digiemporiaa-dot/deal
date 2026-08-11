@@ -45,9 +45,9 @@ export default async function HomePage() {
           <p className="mb-4 inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm backdrop-blur">
             <BadgeCheck className="h-4 w-4" /> Trusted by 10,000+ happy travellers
           </p>
-          <h1 className="max-w-3xl font-display text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl">
-            {settings.tagline}
-          </h1>
+          <h1 className="max-w-3xl font-display text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+  {settings.tagline}
+</h1>
           <p className="mt-5 max-w-xl text-lg text-white/85">
             Handcrafted holiday packages, premium stays and effortless planning — all backed by
             round-the-clock expert support.
