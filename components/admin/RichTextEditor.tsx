@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bold, Italic, List, ListOrdered, Heading2, Link2, Undo, Redo } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Heading2, Link2, Image as ImageIcon, Undo, Redo } from "lucide-react";
 
 /**
  * Lightweight rich-text editor built on a contentEditable surface. It emits
@@ -51,6 +51,17 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
           title="Insert link"
         >
           <Link2 className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => {
+            const url = prompt("Enter image URL");
+            if (url) exec("insertImage", url);
+          }}
+          title="Insert image"
+        >
+          <ImageIcon className="h-4 w-4" />
         </button>
         <span className="mx-1 h-5 w-px bg-slate-300" />
         <button type="button" className={btn} onClick={() => exec("undo")} title="Undo"><Undo className="h-4 w-4" /></button>
