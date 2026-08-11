@@ -32,7 +32,16 @@ export type SiteSettings = {
     metaPixelId: string;
     googleTagManagerId: string;
   };
+  navigation: {
+    headerLinks: NavLink[];
+    footerExploreTitle: string;
+    footerExploreLinks: NavLink[];
+    footerSupportTitle: string;
+    footerSupportLinks: NavLink[];
+  };
 };
+
+export type NavLink = { label: string; href: string };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
   siteName: "Vacationdeal",
@@ -59,6 +68,29 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     metaPixelId: "",
     googleTagManagerId: "",
   },
+  navigation: {
+    headerLinks: [
+      { label: "Home", href: "/" },
+      { label: "Destinations", href: "/destinations" },
+      { label: "Packages", href: "/packages" },
+      { label: "About", href: "/about" },
+      { label: "Blog", href: "/blog" },
+      { label: "Contact", href: "/contact" },
+    ],
+    footerExploreTitle: "Explore",
+    footerExploreLinks: [
+      { label: "Destinations", href: "/destinations" },
+      { label: "Packages", href: "/packages" },
+      { label: "Travel Blog", href: "/blog" },
+      { label: "About Us", href: "/about" },
+    ],
+    footerSupportTitle: "Support",
+    footerSupportLinks: [
+      { label: "Contact", href: "/contact" },
+      { label: "Book a Trip", href: "/packages" },
+      { label: "Admin Login", href: "/admin/login" },
+    ],
+  },
 };
 
 /**
@@ -70,7 +102,12 @@ export const getSettings = cache(async (): Promise<SiteSettings> => {
   try {
     const row = await prisma.siteSetting.findUnique({ where: { id: 1 } });
     if (!row) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...(row.data as Partial<SiteSettings>) };
+    const data = row.data as Partial<SiteSettings>;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...data,
+      navigation: { ...DEFAULT_SETTINGS.navigation, ...(data.navigation || {}) },
+    };
   } catch {
     return DEFAULT_SETTINGS;
   }
