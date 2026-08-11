@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 
 export default async function EditPagePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const page = await prisma.page.findUnique({ where: { id } });
+  const page = await prisma.page.findUnique({
+    where: { id },
+    include: { faqs: { orderBy: { sortOrder: "asc" } } },
+  });
   if (!page) notFound();
 
   const initial = {
@@ -16,6 +19,8 @@ export default async function EditPagePage({ params }: { params: Promise<{ id: s
     status: page.status as "DRAFT" | "PUBLISHED",
     seoTitle: page.seoTitle ?? "",
     seoDescription: page.seoDescription ?? "",
+    ogImage: page.ogImage ?? "",
+    faqs: page.faqs.map((f) => ({ question: f.question, answer: f.answer })),
   };
 
   return (
