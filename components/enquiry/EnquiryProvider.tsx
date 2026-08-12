@@ -18,7 +18,7 @@ export function useEnquiry() {
   return ctx;
 }
 
-export function EnquiryProvider({ children }: { children: React.ReactNode }) {
+export function EnquiryProvider({ children, whatsappNumber }: { children: React.ReactNode; whatsappNumber?: string }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [opts, setOpts] = React.useState<OpenOptions>({});
 
@@ -37,6 +37,7 @@ export function EnquiryProvider({ children }: { children: React.ReactNode }) {
         title={opts.title}
         defaultDestination={opts.destination}
         source={opts.source}
+        whatsappNumber={whatsappNumber}
       />
     </EnquiryContext.Provider>
   );
