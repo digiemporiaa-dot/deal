@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, CheckCircle2, Loader2 } from "lucide-react";
+import { X, CheckCircle2, Loader2, MessageCircle } from "lucide-react";
 import { leadSchema, type LeadInput } from "@/lib/validation";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, Label, FieldError } from "@/components/ui/Field";
@@ -14,11 +14,13 @@ type Props = {
   title?: string;
   defaultDestination?: string;
   source?: string;
+  whatsappNumber?: string;
 };
 
-export function EnquiryModal({ isOpen, onClose, title, defaultDestination, source }: Props) {
+export function EnquiryModal({ isOpen, onClose, title, defaultDestination, source, whatsappNumber }: Props) {
   const [status, setStatus] = React.useState<"idle" | "submitting" | "success" | "error">("idle");
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [submitted, setSubmitted] = React.useState<LeadInput | null>(null);
 
   const {
     register,
@@ -52,6 +54,21 @@ export function EnquiryModal({ isOpen, onClose, title, defaultDestination, sourc
 
   if (!isOpen) return null;
 
+  // Build the pre-filled WhatsApp message from the submitted enquiry.
+  const waDigits = (whatsappNumber || "").replace(/[^0-9]/g, "");
+  const waLink = (() => {
+    if (!waDigits || !submitted) return null;
+    const parts = [
+      `Hi! I'm ${submitted.name}.`,
+      submitted.destination ? `I'm interested in a trip to ${submitted.destination}.` : "I'm interested in planning a trip.",
+      submitted.travelDate ? `Travel date: ${submitted.travelDate}.` : "",
+      submitted.travellers ? `Travellers: ${submitted.travellers}.` : "",
+      submitted.budget ? `Budget: ${submitted.budget}.` : "",
+      "Please share a free itinerary and quote.",
+    ].filter(Boolean);
+    return `https://wa.me/${waDigits}?text=${encodeURIComponent(parts.join(" "))}`;
+  })();
+
   const onSubmit = async (values: LeadInput) => {
     setStatus("submitting");
     setServerError(null);
@@ -67,6 +84,7 @@ export function EnquiryModal({ isOpen, onClose, title, defaultDestination, sourc
         setStatus("error");
         return;
       }
+      setSubmitted(values);
       setStatus("success");
     } catch {
       setServerError("Network error. Please try again.");
@@ -98,7 +116,22 @@ export function EnquiryModal({ isOpen, onClose, title, defaultDestination, sourc
             <p className="mt-2 max-w-sm text-sm text-slate-600">
               Your enquiry has been received. Our travel expert will reach out to you shortly.
             </p>
-            <Button className="mt-6" onClick={onClose}>
+            {waLink && (
+              <>
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-6 inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-[#25D366] px-6 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-[#1fb857]"
+                >
+                  <MessageCircle className="h-5 w-5" /> Continue on WhatsApp
+                </a>
+                <p className="mt-2 text-xs text-slate-400">
+                  Chat with us instantly — your trip details are pre-filled.
+                </p>
+              </>
+            )}
+            <Button variant={waLink ? "outline" : "primary"} className="mt-4" onClick={onClose}>
               Done
             </Button>
           </div>
