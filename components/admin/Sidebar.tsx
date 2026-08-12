@@ -8,6 +8,7 @@ import {
   Star, FileText, Files, Tag, Image as ImageIcon, Settings, UserCog, Menu, X, Plane, LogOut, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canAccessSection } from "@/lib/permissions";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +29,9 @@ const NAV = [
 export function Sidebar({ userName, userRole }: { userName: string; userRole: string }) {
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
+
+  // Only show the sections this user's role may open.
+  const nav = NAV.filter((item) => canAccessSection(userRole, item.href.replace("/admin/", "")));
 
   return (
     <>
@@ -55,7 +59,7 @@ export function Sidebar({ userName, userRole }: { userName: string; userRole: st
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
