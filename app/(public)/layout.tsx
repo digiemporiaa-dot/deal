@@ -8,7 +8,7 @@ import { AnalyticsScripts } from "@/components/site/AnalyticsScripts";
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettings();
   return (
-    <EnquiryProvider>
+    <EnquiryProvider whatsappNumber={settings.whatsapp}>
       <div className="flex min-h-screen flex-col">
         <Header siteName={settings.siteName} links={settings.navigation.headerLinks} />
         <main className="flex-1">{children}</main>
