@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { canAccessPath } from "@/lib/permissions";
 
 /**
  * Edge-safe auth config (no Prisma / bcrypt imports) so it can be used inside
@@ -19,7 +20,15 @@ export const authConfig = {
       const isLoginPage = pathname === "/admin/login";
       if (!isAdminArea) return true;
       if (isLoginPage) return true;
-      return Boolean(auth?.user);
+      if (!auth?.user) return false;
+
+      // Role-based access: send users to the dashboard if the section
+      // is outside their role's permissions.
+      const role = (auth.user as { role?: string }).role;
+      if (!canAccessPath(role, pathname)) {
+        return Response.redirect(new URL("/admin/dashboard", request.nextUrl));
+      }
+      return true;
     },
     jwt({ token, user }) {
       if (user) {
