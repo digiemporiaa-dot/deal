@@ -8,6 +8,7 @@ import { LeadStatusSelect } from "@/components/admin/LeadStatusSelect";
 import { LeadTimeline } from "@/components/admin/LeadTimeline";
 import { LeadEmailForm } from "@/components/admin/LeadEmailForm";
 import { LeadFollowUp } from "@/components/admin/LeadFollowUp";
+import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
 import { formatDate } from "@/lib/utils";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 
@@ -15,10 +16,20 @@ export const dynamic = "force-dynamic";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    include: { notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } } },
-  });
+  const [lead, members] = await Promise.all([
+    prisma.lead.findUnique({
+      where: { id },
+      include: {
+        notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
+        assignedTo: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, role: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
   if (!lead) notFound();
 
   const emailCount = lead.notes.filter((n) => n.type === "EMAIL").length;
@@ -67,6 +78,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               )}
               <Badge tone="brand">{lead.status.replace(/_/g, " ")}</Badge>
             </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="mb-3 font-semibold text-slate-900">Assigned to</h2>
+            <LeadAssignSelect leadId={lead.id} value={lead.assignedToId} members={members} className="w-full" />
+            <p className="mt-2 text-xs text-slate-500">
+              {lead.assignedTo ? `${lead.assignedTo.name} is responsible for this lead.` : "Nobody is responsible for this lead yet."}
+            </p>
           </Card>
 
           <Card className="p-5">
