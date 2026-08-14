@@ -49,6 +49,7 @@ model User {
   sessions     Session[]
   leadNotes    LeadNote[]
   blogPosts    BlogPost[]
+  assignedLeads Lead[]   @relation("LeadAssignee")
 
   @@index([role])
 }
@@ -367,14 +368,17 @@ model Lead {
   source      String     @default("website")
   status      String     @default("NEW")
   nextFollowUpAt DateTime?
+  assignedToId String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   notes LeadNote[]
+  assignedTo User? @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([createdAt])
   @@index([nextFollowUpAt])
+  @@index([assignedToId])
 }
 
 model LeadNote {
