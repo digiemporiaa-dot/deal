@@ -8,7 +8,7 @@ import { auth } from "@/lib/auth";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-const ROLES = ["SUPER_ADMIN", "ADMIN", "CONTENT_MANAGER", "BOOKING_MANAGER"] as const;
+const ROLES = ["SUPER_ADMIN", "ADMIN", "CONTENT_MANAGER", "BOOKING_MANAGER", "SALES_EXECUTIVE"] as const;
 
 const createUserSchema = z.object({
   name: z.string().min(2, "Name is required").max(120),
