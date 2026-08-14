@@ -369,6 +369,8 @@ model Lead {
   status      String     @default("NEW")
   nextFollowUpAt DateTime?
   assignedToId String?
+  sequenceStage Int      @default(0)
+  sequenceStoppedAt DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
