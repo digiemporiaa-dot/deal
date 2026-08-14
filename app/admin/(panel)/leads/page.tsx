@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/utils";
 import { LeadStatusSelect } from "@/components/admin/LeadStatusSelect";
 import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
 import { auth } from "@/lib/auth";
+import { isLeadOwnerOnly, canAssignLeads } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,9 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const session = await auth();
   const myId = session?.user?.id ?? "";
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const ownLeadsOnly = isLeadOwnerOnly(role);
+  const mayAssign = canAssignLeads(role);
   const where: Prisma.LeadWhereInput = {};
   if (sp.status) where.status = sp.status as Prisma.LeadWhereInput["status"];
   if (sp.q) where.OR = [
@@ -31,8 +35,14 @@ export default async function LeadsPage({
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
   if (sp.due === "1") where.nextFollowUpAt = { not: null, lte: endOfToday };
-  if (sp.owner === "me" && myId) where.assignedToId = myId;
-  if (sp.owner === "none") where.assignedToId = null;
+  if (ownLeadsOnly) {
+    // Sales executives can only ever see their own leads, whatever the URL says.
+    where.assignedToId = myId || "__none__";
+  } else {
+    if (sp.owner === "me" && myId) where.assignedToId = myId;
+    if (sp.owner === "none") where.assignedToId = null;
+  }
+  const scope: Prisma.LeadWhereInput = ownLeadsOnly ? { assignedToId: myId || "__none__" } : {};
 
   const [leads, counts, dueCount, myCount, members] = await Promise.all([
     prisma.lead.findMany({
@@ -40,20 +50,25 @@ export default async function LeadsPage({
       orderBy: [{ nextFollowUpAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
       include: { _count: { select: { notes: true } }, assignedTo: { select: { id: true, name: true } } },
     }),
-    prisma.lead.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.lead.count({ where: { nextFollowUpAt: { not: null, lte: endOfToday } } }),
+    prisma.lead.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
+    prisma.lead.count({ where: { ...scope, nextFollowUpAt: { not: null, lte: endOfToday } } }),
     myId ? prisma.lead.count({ where: { assignedToId: myId } }) : Promise.resolve(0),
-    prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
+    mayAssign
+      ? prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } })
+      : Promise.resolve([]),
   ]);
 
   const countFor = (status: string) => counts.find((c) => c.status === status)?._count._all ?? 0;
 
   return (
     <div>
-      <PageHeader title="Leads & Enquiries" description="Track and follow up with potential customers" />
+      <PageHeader
+        title={ownLeadsOnly ? "My Leads" : "Leads & Enquiries"}
+        description={ownLeadsOnly ? "Enquiries assigned to you — follow up and close them" : "Track and follow up with potential customers"}
+      />
 
       {/* Pipeline summary */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-8">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 xl:grid-cols-8">
         {STATUS_LIST.map((s) => (
           <Link
             key={s}
@@ -64,13 +79,15 @@ export default async function LeadsPage({
             <p className="text-xs font-medium text-slate-500">{s.replace(/_/g, " ")}</p>
           </Link>
         ))}
-        <Link
-          href="/admin/leads?owner=me"
-          className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
-        >
-          <p className="text-lg font-bold text-slate-900">{myCount}</p>
-          <p className="text-xs font-medium text-slate-500">MY LEADS</p>
-        </Link>
+        {!ownLeadsOnly && (
+          <Link
+            href="/admin/leads?owner=me"
+            className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            <p className="text-lg font-bold text-slate-900">{myCount}</p>
+            <p className="text-xs font-medium text-slate-500">MY LEADS</p>
+          </Link>
+        )}
         <Link
           href="/admin/leads?due=1"
           className={`rounded-xl border p-3 text-center transition-colors ${
@@ -95,17 +112,22 @@ export default async function LeadsPage({
             <option value="">All leads</option>
             <option value="1">Follow-up due</option>
           </select>
-          <select name="owner" defaultValue={sp.owner} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
-            <option value="">Anyone</option>
-            <option value="me">Assigned to me</option>
-            <option value="none">Unassigned</option>
-          </select>
+          {!ownLeadsOnly && (
+            <select name="owner" defaultValue={sp.owner} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
+              <option value="">Anyone</option>
+              <option value="me">Assigned to me</option>
+              <option value="none">Unassigned</option>
+            </select>
+          )}
           <button className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800">Filter</button>
         </form>
       </Card>
 
       {leads.length === 0 ? (
-        <EmptyState title="No leads found" description="Enquiries submitted from the website appear here." />
+        <EmptyState
+        title={ownLeadsOnly ? "No leads assigned to you yet" : "No leads found"}
+        description={ownLeadsOnly ? "Your manager will assign enquiries to you — they will appear here." : "Enquiries submitted from the website appear here."}
+      />
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
@@ -117,7 +139,7 @@ export default async function LeadsPage({
                   <th className="px-4 py-3">Destination</th>
                   <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3">Follow-up</th>
-                  <th className="px-4 py-3">Assigned to</th>
+                  {!ownLeadsOnly && <th className="px-4 py-3">Assigned to</th>}
                   <th className="px-4 py-3">Activity</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">View</th>
@@ -147,9 +169,15 @@ export default async function LeadsPage({
                           <span className="text-xs text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        <LeadAssignSelect leadId={l.id} value={l.assignedToId} members={members} />
-                      </td>
+                      {!ownLeadsOnly && (
+                        <td className="px-4 py-3">
+                          {mayAssign ? (
+                            <LeadAssignSelect leadId={l.id} value={l.assignedToId} members={members} />
+                          ) : (
+                            <span className="text-xs text-slate-500">{l.assignedTo?.name ?? "—"}</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-xs text-slate-500">{l._count.notes} entries</td>
                       <td className="px-4 py-3"><LeadStatusSelect id={l.id} value={l.status} /></td>
                       <td className="px-4 py-3 text-right">
