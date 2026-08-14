@@ -37,6 +37,8 @@ export const SECTION_ACCESS: Record<string, Role[]> = {
   bookings: SALES,
   leads: SALES,
   coupons: SALES,
+  quotations: SALES,
+  invoices: SALES,
   customers: BOOKING,
   // Owner only
   users: ADMINS,
