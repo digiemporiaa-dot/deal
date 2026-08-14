@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { auth, requireAdmin } from "@/lib/auth";
 import { sendMail } from "@/lib/email/mailer";
 import { leadReplyEmail } from "@/lib/email/lead-email";
+import { leadAssignedEmail } from "@/lib/email/crm-emails";
 import { getSettings } from "@/lib/settings";
 import { isLeadOwnerOnly, canAssignLeads } from "@/lib/permissions";
 import type { LeadStatus } from "@/types/db-enums";
@@ -51,6 +52,14 @@ async function logActivity(input: {
   });
 }
 
+/** A human has engaged with this lead — stop the automatic nurture emails. */
+async function stopSequence(leadId: string) {
+  await prisma.lead.updateMany({
+    where: { id: leadId, sequenceStoppedAt: null },
+    data: { sequenceStoppedAt: new Date() },
+  });
+}
+
 export async function updateLeadStatus(id: string, status: string) {
   const session = await authorizeLead(id);
   if (!session) return { ok: false as const, error: "Not authorized for this lead" };
@@ -58,6 +67,7 @@ export async function updateLeadStatus(id: string, status: string) {
 
   const current = await prisma.lead.findUnique({ where: { id }, select: { status: true } });
   await prisma.lead.update({ where: { id }, data: { status: status as LeadStatus } });
+  await stopSequence(id);
 
   if (current && current.status !== status) {
     await logActivity({
@@ -79,6 +89,7 @@ export async function addLeadNote(leadId: string, body: string) {
   if (!body.trim()) return { ok: false as const, error: "Note cannot be empty" };
 
   await logActivity({ leadId, type: "NOTE", body: body.trim(), authorId: session.user.id });
+  await stopSequence(leadId);
   revalidatePath(`/admin/leads/${leadId}`);
   return { ok: true as const };
 }
@@ -94,6 +105,7 @@ export async function logLeadCall(leadId: string, body: string) {
     body: body.trim() || "Called the customer",
     authorId: session.user.id,
   });
+  await stopSequence(leadId);
   revalidatePath(`/admin/leads/${leadId}`);
   return { ok: true as const };
 }
@@ -139,6 +151,8 @@ export async function sendLeadEmail(leadId: string, subject: string, message: st
     delivered,
     body: cleanMessage,
   });
+
+  await stopSequence(leadId);
 
   // First outreach moves an untouched lead forward automatically.
   if (delivered && lead.status === "NEW") {
@@ -194,11 +208,36 @@ export async function assignLead(leadId: string, userId: string) {
     await prisma.lead.update({ where: { id: leadId }, data: { assignedToId: null } });
     await logActivity({ leadId, type: "ASSIGN", body: "Lead unassigned", authorId: session.user.id });
   } else {
-    const member = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, isActive: true } });
+    const member = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true, isActive: true },
+    });
     if (!member || !member.isActive) return { ok: false as const, error: "That team member is not available" };
 
-    await prisma.lead.update({ where: { id: leadId }, data: { assignedToId: userId } });
+    const lead = await prisma.lead.update({ where: { id: leadId }, data: { assignedToId: userId } });
     await logActivity({ leadId, type: "ASSIGN", body: `Lead assigned to ${member.name}`, authorId: session.user.id });
+
+    // Tell the team member straight away — they should not have to check the panel.
+    if (member.email) {
+      const settings = await getSettings();
+      const base = process.env.NEXT_PUBLIC_SITE_URL || "https://vacation-deal.vercel.app";
+      void sendMail({
+        to: member.email,
+        subject: `New lead assigned: ${lead.name}`,
+        html: leadAssignedEmail({
+          siteName: settings.siteName,
+          staffName: member.name,
+          leadName: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          destination: lead.destination,
+          budget: lead.budget,
+          message: lead.message,
+          assignedBy: session.user.name || "Your manager",
+          leadUrl: `${base}/admin/leads/${leadId}`,
+        }),
+      });
+    }
   }
 
   revalidatePath("/admin/leads");
