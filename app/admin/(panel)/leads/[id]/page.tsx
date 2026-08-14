@@ -9,6 +9,7 @@ import { LeadTimeline } from "@/components/admin/LeadTimeline";
 import { LeadEmailForm } from "@/components/admin/LeadEmailForm";
 import { LeadFollowUp } from "@/components/admin/LeadFollowUp";
 import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
+import { LeadDocumentButton } from "@/components/admin/LeadDocumentButton";
 import { auth } from "@/lib/auth";
 import { isLeadOwnerOnly, canAssignLeads } from "@/lib/permissions";
 import { formatDate } from "@/lib/utils";
@@ -109,6 +110,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <Card className="p-5">
             <h2 className="mb-3 font-semibold text-slate-900">Next follow-up</h2>
             <LeadFollowUp leadId={lead.id} current={lead.nextFollowUpAt ? lead.nextFollowUpAt.toISOString() : null} />
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="mb-3 font-semibold text-slate-900">Quotation</h2>
+            <LeadDocumentButton leadId={lead.id} />
           </Card>
 
           <Card className="p-5">
