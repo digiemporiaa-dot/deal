@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { PageHeader, Card, EmptyState } from "@/components/admin/ui";
 import { formatDate } from "@/lib/utils";
 import { LeadStatusSelect } from "@/components/admin/LeadStatusSelect";
+import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
+import { auth } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +15,11 @@ const STATUS_LIST = ["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; due?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; due?: string; owner?: string }>;
 }) {
   const sp = await searchParams;
+  const session = await auth();
+  const myId = session?.user?.id ?? "";
   const where: Prisma.LeadWhereInput = {};
   if (sp.status) where.status = sp.status as Prisma.LeadWhereInput["status"];
   if (sp.q) where.OR = [
@@ -27,15 +31,19 @@ export default async function LeadsPage({
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
   if (sp.due === "1") where.nextFollowUpAt = { not: null, lte: endOfToday };
+  if (sp.owner === "me" && myId) where.assignedToId = myId;
+  if (sp.owner === "none") where.assignedToId = null;
 
-  const [leads, counts, dueCount] = await Promise.all([
+  const [leads, counts, dueCount, myCount, members] = await Promise.all([
     prisma.lead.findMany({
       where,
       orderBy: [{ nextFollowUpAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
-      include: { _count: { select: { notes: true } } },
+      include: { _count: { select: { notes: true } }, assignedTo: { select: { id: true, name: true } } },
     }),
     prisma.lead.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.lead.count({ where: { nextFollowUpAt: { not: null, lte: endOfToday } } }),
+    myId ? prisma.lead.count({ where: { assignedToId: myId } }) : Promise.resolve(0),
+    prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
   ]);
 
   const countFor = (status: string) => counts.find((c) => c.status === status)?._count._all ?? 0;
@@ -45,7 +53,7 @@ export default async function LeadsPage({
       <PageHeader title="Leads & Enquiries" description="Track and follow up with potential customers" />
 
       {/* Pipeline summary */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-8">
         {STATUS_LIST.map((s) => (
           <Link
             key={s}
@@ -56,6 +64,13 @@ export default async function LeadsPage({
             <p className="text-xs font-medium text-slate-500">{s.replace(/_/g, " ")}</p>
           </Link>
         ))}
+        <Link
+          href="/admin/leads?owner=me"
+          className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
+        >
+          <p className="text-lg font-bold text-slate-900">{myCount}</p>
+          <p className="text-xs font-medium text-slate-500">MY LEADS</p>
+        </Link>
         <Link
           href="/admin/leads?due=1"
           className={`rounded-xl border p-3 text-center transition-colors ${
@@ -80,6 +95,11 @@ export default async function LeadsPage({
             <option value="">All leads</option>
             <option value="1">Follow-up due</option>
           </select>
+          <select name="owner" defaultValue={sp.owner} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
+            <option value="">Anyone</option>
+            <option value="me">Assigned to me</option>
+            <option value="none">Unassigned</option>
+          </select>
           <button className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800">Filter</button>
         </form>
       </Card>
@@ -89,7 +109,7 @@ export default async function LeadsPage({
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[940px] text-sm">
+            <table className="w-full min-w-[1120px] text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Name</th>
@@ -97,6 +117,7 @@ export default async function LeadsPage({
                   <th className="px-4 py-3">Destination</th>
                   <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3">Follow-up</th>
+                  <th className="px-4 py-3">Assigned to</th>
                   <th className="px-4 py-3">Activity</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">View</th>
@@ -125,6 +146,9 @@ export default async function LeadsPage({
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <LeadAssignSelect leadId={l.id} value={l.assignedToId} members={members} />
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{l._count.notes} entries</td>
                       <td className="px-4 py-3"><LeadStatusSelect id={l.id} value={l.status} /></td>
