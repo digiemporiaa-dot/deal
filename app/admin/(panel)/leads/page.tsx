@@ -40,7 +40,8 @@ export default async function LeadsPage({
     where.assignedToId = myId || "__none__";
   } else {
     if (sp.owner === "me" && myId) where.assignedToId = myId;
-    if (sp.owner === "none") where.assignedToId = null;
+    else if (sp.owner === "none") where.assignedToId = null;
+    else if (sp.owner) where.assignedToId = sp.owner; // a specific team member's id
   }
   const scope: Prisma.LeadWhereInput = ownLeadsOnly ? { assignedToId: myId || "__none__" } : {};
 
@@ -117,6 +118,9 @@ export default async function LeadsPage({
               <option value="">Anyone</option>
               <option value="me">Assigned to me</option>
               <option value="none">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
             </select>
           )}
           <button className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800">Filter</button>
