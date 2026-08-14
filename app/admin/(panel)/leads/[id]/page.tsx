@@ -9,6 +9,8 @@ import { LeadTimeline } from "@/components/admin/LeadTimeline";
 import { LeadEmailForm } from "@/components/admin/LeadEmailForm";
 import { LeadFollowUp } from "@/components/admin/LeadFollowUp";
 import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
+import { auth } from "@/lib/auth";
+import { isLeadOwnerOnly, canAssignLeads } from "@/lib/permissions";
 import { formatDate } from "@/lib/utils";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 
@@ -16,6 +18,11 @@ export const dynamic = "force-dynamic";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const session = await auth();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const ownLeadsOnly = isLeadOwnerOnly(role);
+  const mayAssign = canAssignLeads(role);
+
   const [lead, members] = await Promise.all([
     prisma.lead.findUnique({
       where: { id },
@@ -24,13 +31,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         assignedTo: { select: { id: true, name: true } },
       },
     }),
-    prisma.user.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, role: true },
-      orderBy: { name: "asc" },
-    }),
+    canAssignLeads(role)
+      ? prisma.user.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, role: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
   if (!lead) notFound();
+
+  // A sales executive may only open a lead that belongs to them.
+  if (ownLeadsOnly && lead.assignedToId !== session?.user?.id) notFound();
 
   const emailCount = lead.notes.filter((n) => n.type === "EMAIL").length;
   const callCount = lead.notes.filter((n) => n.type === "CALL").length;
@@ -80,13 +92,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </div>
           </Card>
 
-          <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Assigned to</h2>
-            <LeadAssignSelect leadId={lead.id} value={lead.assignedToId} members={members} className="w-full" />
-            <p className="mt-2 text-xs text-slate-500">
-              {lead.assignedTo ? `${lead.assignedTo.name} is responsible for this lead.` : "Nobody is responsible for this lead yet."}
-            </p>
-          </Card>
+          {!ownLeadsOnly && (
+            <Card className="p-5">
+              <h2 className="mb-3 font-semibold text-slate-900">Assigned to</h2>
+              {mayAssign ? (
+                <LeadAssignSelect leadId={lead.id} value={lead.assignedToId} members={members} className="w-full" />
+              ) : (
+                <p className="text-sm font-medium text-slate-900">{lead.assignedTo?.name ?? "Unassigned"}</p>
+              )}
+              <p className="mt-2 text-xs text-slate-500">
+                {lead.assignedTo ? `${lead.assignedTo.name} is responsible for this lead.` : "Nobody is responsible for this lead yet."}
+              </p>
+            </Card>
+          )}
 
           <Card className="p-5">
             <h2 className="mb-3 font-semibold text-slate-900">Next follow-up</h2>
