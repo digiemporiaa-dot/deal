@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Package, MapPin, CalendarCheck, Users, MessageSquare,
   Star, FileText, Files, Tag, Image as ImageIcon, Settings, UserCog, Menu, X, Plane, LogOut, ClipboardList,
+  FileSpreadsheet, ReceiptIndianRupee,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccessSection } from "@/lib/permissions";
@@ -17,6 +18,8 @@ const NAV = [
   { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/leads", label: "Leads", icon: ClipboardList },
+  { href: "/admin/quotations", label: "Quotations", icon: FileSpreadsheet },
+  { href: "/admin/invoices", label: "Invoices", icon: ReceiptIndianRupee },
   { href: "/admin/testimonials", label: "Testimonials", icon: Star },
   { href: "/admin/blogs", label: "Blogs", icon: FileText },
   { href: "/admin/pages", label: "Pages", icon: Files },
