@@ -43,6 +43,7 @@ export const ADMIN_ROLES = [
   "ADMIN",
   "CONTENT_MANAGER",
   "BOOKING_MANAGER",
+  "SALES_EXECUTIVE",
 ] as const;
 
 /** Guard for server actions / route handlers — throws if not authenticated. */
