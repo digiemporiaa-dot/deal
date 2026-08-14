@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
-import { canAccessPath } from "@/lib/permissions";
+import { canAccessPath, landingPathFor } from "@/lib/permissions";
 
 /**
  * Edge-safe auth config (no Prisma / bcrypt imports) so it can be used inside
@@ -26,7 +26,7 @@ export const authConfig = {
       // is outside their role's permissions.
       const role = (auth.user as { role?: string }).role;
       if (!canAccessPath(role, pathname)) {
-        return Response.redirect(new URL("/admin/dashboard", request.nextUrl));
+        return Response.redirect(new URL(landingPathFor(role), request.nextUrl));
       }
       return true;
     },
