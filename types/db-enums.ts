@@ -2,7 +2,12 @@
 // SQLite has no native enums, so these columns are plain `String`; import these
 // aliases where a narrow type is helpful (validation lists, tone maps, etc.).
 
-export type UserRole = "SUPER_ADMIN" | "ADMIN" | "CONTENT_MANAGER" | "BOOKING_MANAGER";
+export type UserRole =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "CONTENT_MANAGER"
+  | "BOOKING_MANAGER"
+  | "SALES_EXECUTIVE";
 
 export type BookingStatus =
   | "PENDING"
