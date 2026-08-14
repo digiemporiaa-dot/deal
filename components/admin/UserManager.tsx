@@ -13,6 +13,7 @@ const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Admin — full control, can manage users" },
   { value: "CONTENT_MANAGER", label: "Content Manager — pages, blogs, media" },
   { value: "BOOKING_MANAGER", label: "Booking Manager — bookings, leads, customers" },
+  { value: "SALES_EXECUTIVE", label: "Sales Executive — bookings, coupons, own leads only" },
 ] as const;
 
 type UserRow = {
