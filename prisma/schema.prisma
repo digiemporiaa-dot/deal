@@ -366,6 +366,7 @@ model Lead {
   message     String?
   source      String     @default("website")
   status      String     @default("NEW")
+  nextFollowUpAt DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -373,6 +374,7 @@ model Lead {
 
   @@index([status])
   @@index([createdAt])
+  @@index([nextFollowUpAt])
 }
 
 model LeadNote {
@@ -380,6 +382,10 @@ model LeadNote {
   leadId    String
   authorId  String?
   body      String
+  type      String   @default("NOTE")
+  subject   String?
+  emailTo   String?
+  delivered Boolean  @default(true)
   createdAt DateTime @default(now())
 
   lead   Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
