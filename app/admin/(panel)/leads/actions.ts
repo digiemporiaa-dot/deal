@@ -163,6 +163,27 @@ export async function setLeadFollowUp(leadId: string, date: string) {
   return { ok: true as const };
 }
 
+/** Assign the lead to a team member, or pass an empty string to unassign. */
+export async function assignLead(leadId: string, userId: string) {
+  const session = await auth();
+  if (!session?.user) return { ok: false as const, error: "Not authorized" };
+
+  if (!userId) {
+    await prisma.lead.update({ where: { id: leadId }, data: { assignedToId: null } });
+    await logActivity({ leadId, type: "ASSIGN", body: "Lead unassigned", authorId: session.user.id });
+  } else {
+    const member = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, isActive: true } });
+    if (!member || !member.isActive) return { ok: false as const, error: "That team member is not available" };
+
+    await prisma.lead.update({ where: { id: leadId }, data: { assignedToId: userId } });
+    await logActivity({ leadId, type: "ASSIGN", body: `Lead assigned to ${member.name}`, authorId: session.user.id });
+  }
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${leadId}`);
+  return { ok: true as const };
+}
+
 export async function deleteLead(id: string) {
   await requireAdmin();
   await prisma.lead.delete({ where: { id } });
