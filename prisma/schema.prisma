@@ -50,6 +50,7 @@ model User {
   leadNotes    LeadNote[]
   blogPosts    BlogPost[]
   assignedLeads Lead[]   @relation("LeadAssignee")
+  documents    SalesDocument[] @relation("DocumentAuthor")
 
   @@index([role])
 }
@@ -375,6 +376,7 @@ model Lead {
   updatedAt   DateTime   @updatedAt
 
   notes LeadNote[]
+  documents SalesDocument[]
   assignedTo User? @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([status])
@@ -523,4 +525,65 @@ model SiteSetting {
   id        Int      @id @default(1)
   data      Json
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sales documents — quotations and invoices share one shape
+// ─────────────────────────────────────────────────────────────
+
+model SalesDocument {
+  id            String   @id @default(cuid())
+  kind          String   @default("QUOTATION")
+  number        String   @unique
+  status        String   @default("DRAFT")
+
+  leadId        String?
+  bookingId     String?
+  createdById   String?
+
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  billingAddress String?
+
+  title         String?
+  destination   String?
+  travelDate    DateTime?
+  travellers    Int?
+  validUntil    DateTime?
+  dueDate       DateTime?
+
+  currency      String   @default("INR")
+  discount      Decimal  @default(0)
+  taxPercent    Decimal  @default(0)
+  amountPaid    Decimal  @default(0)
+
+  notes         String?
+  terms         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items     SalesDocumentItem[]
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdBy User?    @relation("DocumentAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([kind])
+  @@index([status])
+  @@index([leadId])
+  @@index([createdAt])
+}
+
+model SalesDocumentItem {
+  id          String  @id @default(cuid())
+  documentId  String
+  title       String
+  description String?
+  quantity    Int     @default(1)
+  unitPrice   Decimal @default(0)
+  sortOrder   Int     @default(0)
+
+  document SalesDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
