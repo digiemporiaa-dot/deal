@@ -1,25 +1,30 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import { Faqs } from "@/components/site/Faqs";
+import { PreviewBanner } from "@/components/site/PreviewBanner";
 
 /**
  * Generic CMS page renderer (e.g. /about, /terms, /privacy). Matches a Page
  * record by slug. More specific routes (packages, destinations, blog, contact)
  * take priority over this catch-all single segment.
+ *
+ * Signed-in admin users can also open a DRAFT page by adding ?preview=1.
+ * If no page matches, a saved redirect for this path is honoured before 404.
  */
-type Params = { params: Promise<{ slug: string }> };
+type Params = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> };
 
-async function getPage(slug: string) {
+async function getPage(slug: string, allowDraft: boolean) {
   return prisma.page.findFirst({
-    where: { slug, status: "PUBLISHED" },
+    where: allowDraft ? { slug } : { slug, status: "PUBLISHED" },
     include: { faqs: { where: { published: true }, orderBy: { sortOrder: "asc" } } },
   });
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const page = await getPage(slug);
+  const page = await getPage(slug, false);
   if (!page) return { title: "Page not found" };
   return {
     title: page.seoTitle || page.title,
@@ -40,13 +45,32 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-export default async function CmsPage({ params }: Params) {
+export default async function CmsPage({ params, searchParams }: Params) {
   const { slug } = await params;
-  const page = await getPage(slug);
-  if (!page) notFound();
+  const sp = await searchParams;
+
+  // Draft preview is only for signed-in admin users.
+  const session = sp.preview === "1" ? await auth() : null;
+  const allowDraft = Boolean(session?.user);
+
+  const page = await getPage(slug, allowDraft);
+
+  if (!page) {
+    // Before giving up, honour a redirect the team saved for this address.
+    const rule = await prisma.redirect.findFirst({
+      where: { source: `/${slug}`, isActive: true },
+    });
+    if (rule) {
+      await prisma.redirect.update({ where: { id: rule.id }, data: { hits: { increment: 1 } } });
+      redirect(rule.target);
+    }
+    notFound();
+  }
+
+  const isDraft = page.status !== "PUBLISHED";
 
   const faqSchema =
-    page.faqs.length > 0
+    page.faqs.length > 0 && !isDraft
       ? {
           "@context": "https://schema.org",
           "@type": "FAQPage",
@@ -59,21 +83,24 @@ export default async function CmsPage({ params }: Params) {
       : null;
 
   return (
-    <div className="container-page max-w-3xl py-14">
-      {faqSchema && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-        />
-      )}
-      <h1 className="font-display text-4xl font-bold text-slate-900">{page.title}</h1>
-      <div className="prose-content mt-6" dangerouslySetInnerHTML={{ __html: page.content }} />
-      {page.faqs.length > 0 && (
-        <div className="mt-12">
-          <h2 className="mb-4 text-2xl font-bold text-slate-900">FAQs</h2>
-          <Faqs items={page.faqs} />
-        </div>
-      )}
-    </div>
+    <>
+      {isDraft && <PreviewBanner title={page.title} editHref={`/admin/pages/${page.id}`} />}
+      <div className="container-page max-w-3xl py-14">
+        {faqSchema && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+          />
+        )}
+        <h1 className="font-display text-4xl font-bold text-slate-900">{page.title}</h1>
+        <div className="prose-content mt-6" dangerouslySetInnerHTML={{ __html: page.content }} />
+        {page.faqs.length > 0 && (
+          <div className="mt-12">
+            <h2 className="mb-4 text-2xl font-bold text-slate-900">FAQs</h2>
+            <Faqs items={page.faqs} />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
