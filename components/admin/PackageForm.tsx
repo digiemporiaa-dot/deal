@@ -34,7 +34,7 @@ type FormValues = {
   inclusions: { value: string }[];
   exclusions: { value: string }[];
   images: { url: string; alt: string }[];
-  itinerary: { dayNumber: number; title: string; description: string; activities: string; meals: string; hotel: string }[];
+  itinerary: { dayNumber: number; title: string; description: string; activities: string; meals: string; hotel: string; transfers: string }[];
   hotels: { name: string; location: string; roomType: string; nights: number; description: string }[];
   activities: { name: string; description: string; price?: number }[];
   faqs: { question: string; answer: string }[];
@@ -71,7 +71,7 @@ export function PackageForm({
       inclusions: [{ value: "" }],
       exclusions: [{ value: "" }],
       images: [{ url: "", alt: "" }],
-      itinerary: [{ dayNumber: 1, title: "", description: "", activities: "", meals: "", hotel: "" }],
+      itinerary: [{ dayNumber: 1, title: "", description: "", activities: "", meals: "", hotel: "", transfers: "" }],
       hotels: [],
       activities: [],
       faqs: [],
@@ -233,7 +233,7 @@ export function PackageForm({
           <ObjectRepeater
             control={control}
             name="itinerary"
-            empty={{ dayNumber: 0, title: "", description: "", activities: "", meals: "", hotel: "" }}
+            empty={{ dayNumber: 0, title: "", description: "", activities: "", meals: "", hotel: "", transfers: "" }}
             addLabel="Add Day"
             itemLabel={(i) => `Day ${i + 1}`}
             render={(index) => (
@@ -244,6 +244,7 @@ export function PackageForm({
                   <Input {...register(`itinerary.${index}.activities`)} placeholder="Activities" />
                   <Input {...register(`itinerary.${index}.meals`)} placeholder="Meals (e.g. Breakfast)" />
                   <Input {...register(`itinerary.${index}.hotel`)} placeholder="Hotel" />
+                  <Input {...register(`itinerary.${index}.transfers`)} placeholder="Transfers (e.g. Airport pickup)" />
                 </div>
               </div>
             )}
