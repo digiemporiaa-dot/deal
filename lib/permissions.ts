@@ -43,6 +43,7 @@ export const SECTION_ACCESS: Record<string, Role[]> = {
   customers: BOOKING,
   reports: BOOKING,
   // Owner only
+  export: ADMINS,
   users: ADMINS,
   settings: ADMINS,
 };
