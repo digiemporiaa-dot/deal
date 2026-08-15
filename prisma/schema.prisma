@@ -587,3 +587,17 @@ model SalesDocumentItem {
 
   @@index([documentId])
 }
+
+model Redirect {
+  id        String   @id @default(cuid())
+  source    String   @unique
+  target    String
+  permanent Boolean  @default(true)
+  hits      Int      @default(0)
+  isActive  Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
