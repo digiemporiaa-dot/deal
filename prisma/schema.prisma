@@ -207,6 +207,7 @@ model ItineraryDay {
   activities  String?
   meals       String?
   hotel       String?
+  transfers   String?
   sortOrder   Int           @default(0)
   package     TravelPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
