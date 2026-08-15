@@ -54,8 +54,9 @@ export default async function EditPackagePage({ params }: { params: Promise<{ id
       ? pkg.itinerary.map((d) => ({
           dayNumber: d.dayNumber, title: d.title, description: d.description,
           activities: d.activities ?? "", meals: d.meals ?? "", hotel: d.hotel ?? "",
+          transfers: d.transfers ?? "",
         }))
-      : [{ dayNumber: 1, title: "", description: "", activities: "", meals: "", hotel: "" }],
+      : [{ dayNumber: 1, title: "", description: "", activities: "", meals: "", hotel: "", transfers: "" }],
     hotels: pkg.hotels.map((h) => ({
       name: h.name, location: h.location ?? "", roomType: h.roomType ?? "", nights: h.nights, description: h.description ?? "",
     })),
