@@ -59,6 +59,7 @@ const itineraryDaySchema = z.object({
   activities: z.string().optional().default(""),
   meals: z.string().optional().default(""),
   hotel: z.string().optional().default(""),
+  transfers: z.string().optional().default(""),
 });
 
 const hotelSchema = z.object({
