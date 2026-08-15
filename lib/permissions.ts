@@ -32,6 +32,7 @@ export const SECTION_ACCESS: Record<string, Role[]> = {
   blogs: CONTENT,
   pages: CONTENT,
   media: CONTENT,
+  redirects: CONTENT,
   testimonials: CONTENT,
   // Booking / sales side
   bookings: SALES,
