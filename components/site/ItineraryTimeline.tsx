@@ -1,4 +1,4 @@
-import { Utensils, BedDouble, Activity } from "lucide-react";
+import { Utensils, BedDouble, Activity, Car } from "lucide-react";
 
 type Day = {
   id: string;
@@ -8,6 +8,7 @@ type Day = {
   activities: string | null;
   meals: string | null;
   hotel: string | null;
+  transfers?: string | null;
 };
 
 export function ItineraryTimeline({ days }: { days: Day[] }) {
@@ -39,6 +40,11 @@ export function ItineraryTimeline({ days }: { days: Day[] }) {
               {day.hotel && (
                 <span className="inline-flex items-center gap-1.5">
                   <BedDouble className="h-3.5 w-3.5 text-brand-500" /> {day.hotel}
+                </span>
+              )}
+              {day.transfers && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Car className="h-3.5 w-3.5 text-brand-500" /> {day.transfers}
                 </span>
               )}
             </div>
