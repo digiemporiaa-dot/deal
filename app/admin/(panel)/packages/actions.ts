@@ -49,6 +49,7 @@ function nestedCreateData(data: PackageInput) {
         activities: d.activities || null,
         meals: d.meals || null,
         hotel: d.hotel || null,
+        transfers: d.transfers || null,
         sortOrder: i,
       })),
     },
