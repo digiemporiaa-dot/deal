@@ -8,6 +8,7 @@ import { Input, Textarea, Label, Select, FieldError } from "@/components/ui/Fiel
 import { Button } from "@/components/ui/Button";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { savePage, type ActionResult, type PageInput } from "@/app/admin/(panel)/pages/actions";
+import { PagePreviewLink } from "@/components/admin/PagePreviewLink";
 
 type SectionValue = { heading: string; level: "h1" | "h2" | "h3" | "h4" | "h5" | "h6"; body: string };
 
@@ -31,7 +32,7 @@ export function PageForm({
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { register, handleSubmit, control, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       title: "", slug: "", status: "PUBLISHED", seoTitle: "", seoDescription: "", ogImage: "",
       sections: [{ ...EMPTY_SECTION }], faqs: [],
@@ -145,6 +146,7 @@ export function PageForm({
               <option value="DRAFT">Draft (hidden)</option>
             </Select>
           </div>
+          <PagePreviewLink slug={watch("slug")} />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
