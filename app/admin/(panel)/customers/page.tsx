@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/db";
 import { PageHeader, Card, EmptyState } from "@/components/admin/ui";
 import { formatDate } from "@/lib/utils";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("customers:view");
+
   const sp = await searchParams;
   const customers = await prisma.customer.findMany({
     where: sp.q ? { OR: [{ name: { contains: sp.q } }, { email: { contains: sp.q } }, { phone: { contains: sp.q } }] } : undefined,

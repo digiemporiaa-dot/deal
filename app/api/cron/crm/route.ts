@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
+import { ipFromRequest } from "@/lib/guard";
 import { sendMail } from "@/lib/email/mailer";
 import { getSettings } from "@/lib/settings";
 import { followUpDigestEmail, sequenceEmail, SEQUENCE_STEPS } from "@/lib/email/crm-emails";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Constant-time comparison so the secret cannot be guessed byte by byte. */
+function timingSafeMatch(received: string | null, expected: string): boolean {
+  if (!received) return false;
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 function baseUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || "https://vacation-deal.vercel.app";
@@ -24,11 +36,20 @@ function fmt(d: Date): string {
  *     overdue and due-today leads.
  */
 export async function GET(request: Request) {
-  // Vercel Cron sends this header; a manual call must carry CRON_SECRET.
+  // Vercel Cron signs its calls with CRON_SECRET in the Authorization header.
+  // A user-agent string is not proof of anything — anyone can send one — so it
+  // is not accepted on its own. Without a configured secret the endpoint is
+  // closed in production and open in development.
   const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  const isVercelCron = request.headers.get("user-agent")?.includes("vercel-cron");
-  if (secret && !isVercelCron && auth !== `Bearer ${secret}`) {
+  const header = request.headers.get("authorization");
+
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      logger.security("cron_secret_missing", {});
+      return NextResponse.json({ ok: false, error: "Not configured" }, { status: 503 });
+    }
+  } else if (!timingSafeMatch(header, `Bearer ${secret}`)) {
+    logger.security("cron_unauthorized", { ip: ipFromRequest(request) });
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
@@ -142,5 +163,6 @@ export async function GET(request: Request) {
     if (sent) digestsSent += 1;
   }
 
+  logger.info("cron.crm_completed", { sequenceSent, digestsSent, checked: candidates.length });
   return NextResponse.json({ ok: true, sequenceSent, digestsSent, checked: candidates.length });
 }

@@ -1,5 +1,6 @@
 import "server-only";
 import nodemailer from "nodemailer";
+import { logger } from "@/lib/logger";
 
 /**
  * SMTP transport built from environment variables. If SMTP is not configured,
@@ -31,21 +32,59 @@ export type MailInput = {
   replyTo?: string;
 };
 
+/**
+ * Strip anything that could break out of a header.
+ *
+ * Subjects and reply-to addresses come from admin input (a reply to a lead,
+ * a quotation title). A carriage return or newline in a header value lets the
+ * sender inject extra headers — a Bcc, a different From — so they are removed
+ * before the value reaches the transport.
+ */
+function headerSafe(value: string, maxLength = 300): string {
+  return value
+    .replace(/[\r\n\u2028\u2029\u0000]+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+/** A single, syntactically plausible address — not a list. */
+function singleAddress(value: string): string | undefined {
+  const cleaned = headerSafe(value, 320);
+  if (!cleaned || cleaned.includes(",") || cleaned.includes(";")) return undefined;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned) ? cleaned : undefined;
+}
+
 export async function sendMail({ to, subject, html, replyTo }: MailInput): Promise<boolean> {
   const transport = getTransport();
   const from = process.env.EMAIL_FROM || "Vacationdeal <no-reply@vacationdeal.test>";
 
+  const recipient = singleAddress(to);
+  if (!recipient) {
+    logger.warn("email.invalid_recipient", {});
+    return false;
+  }
+
+  const cleanSubject = headerSafe(subject) || "(no subject)";
+  const cleanReplyTo = replyTo ? singleAddress(replyTo) : undefined;
+
   if (!transport) {
     // Graceful no-op fallback — keeps flows working without SMTP configured.
-    console.info(`[email:skipped-no-smtp] to=${to} subject="${subject}"`);
+    logger.info("email.skipped_no_smtp", { to: recipient, subject: cleanSubject });
     return false;
   }
 
   try {
-    await transport.sendMail({ from, to, subject, html, replyTo });
+    await transport.sendMail({
+      from,
+      to: recipient,
+      subject: cleanSubject,
+      html,
+      ...(cleanReplyTo ? { replyTo: cleanReplyTo } : {}),
+    });
+    logger.info("email.sent", { to: recipient, subject: cleanSubject });
     return true;
   } catch (err) {
-    console.error("[email:error]", err);
+    logger.error("email.send_failed", { to: recipient, error: err });
     return false;
   }
 }

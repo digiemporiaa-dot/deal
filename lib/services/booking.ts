@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
 import { generateBookingNumber } from "@/lib/utils";
+import { resolveAttribution } from "@/lib/services/lead";
 import type { BookingInput } from "@/lib/validation";
 
 /**
@@ -26,6 +27,10 @@ export async function createBooking(input: BookingInput) {
   });
 
   const c = input.customer;
+
+  // Same first-touch cookie the lead form reads, so a booking can be
+  // attributed to the campaign that produced it.
+  const attribution = await resolveAttribution();
 
   const booking = await prisma.$transaction(async (tx) => {
     // Upsert customer by (email, phone).
@@ -67,6 +72,13 @@ export async function createBooking(input: BookingInput) {
         status: "PAYMENT_PENDING",
         paymentStatus: "PENDING",
         specialRequests: input.specialRequests || null,
+        source: attribution.source,
+        medium: attribution.medium,
+        campaign: attribution.campaign,
+        landingPage: attribution.landingPage,
+        referrer: attribution.referrer,
+        gclid: attribution.gclid,
+        fbclid: attribution.fbclid,
       },
       include: { customer: true, package: { select: { name: true } } },
     });

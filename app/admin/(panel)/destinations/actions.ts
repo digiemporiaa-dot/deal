@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { guardAction } from "@/lib/guard";
+import { publishBlocked } from "@/lib/permissions";
+import { recordActivity } from "@/lib/activity";
+import { createSlugRedirect } from "@/lib/redirects";
+import { toSafeError } from "@/lib/errors";
 import { destinationSchema, type DestinationInput } from "@/lib/validation";
 import { slugify, serializeList } from "@/lib/utils";
 
@@ -49,66 +53,143 @@ function baseData(data: DestinationInput) {
 }
 
 export async function createDestination(input: DestinationInput): Promise<ActionResult> {
-  try { await requireAdmin(); } catch { return { ok: false, error: "Not authorized." }; }
+  const guard = await guardAction("destinations:create");
+  if (!guard.ok) return { ok: false, error: guard.error };
   const parsed = destinationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please fix the highlighted fields.", issues: parsed.error.flatten().fieldErrors };
   const data = parsed.data;
   try {
     const slug = await uniqueSlug(data.slug || data.name);
     const dest = await prisma.destination.create({ data: { ...baseData(data), slug, ...nested(data) } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "CREATE",
+      entity: "Destination",
+      entityId: dest.id,
+      description: `Created destination "${dest.name}"`,
+      metadata: { slug, published: data.isPublished },
+    });
+
     revalidatePath("/admin/destinations");
     revalidatePath("/destinations");
     return { ok: true, id: dest.id };
   } catch (err) {
-    console.error("[createDestination]", err);
-    return { ok: false, error: "Could not create destination." };
+    return { ok: false, error: toSafeError(err, "action.createDestination").message };
   }
 }
 
 export async function updateDestination(id: string, input: DestinationInput): Promise<ActionResult> {
-  try { await requireAdmin(); } catch { return { ok: false, error: "Not authorized." }; }
+  const guard = await guardAction("destinations:update");
+  if (!guard.ok) return { ok: false, error: guard.error };
   const parsed = destinationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please fix the highlighted fields.", issues: parsed.error.flatten().fieldErrors };
   const data = parsed.data;
   try {
+    const before = await prisma.destination.findUnique({
+      where: { id },
+      select: { slug: true, isPublished: true, isFeatured: true },
+    });
+    if (!before) return { ok: false, error: "Destination not found." };
+
+    const publishError = publishBlocked(
+      guard.actor.role,
+      "destinations:publish",
+      before.isPublished !== data.isPublished || before.isFeatured !== data.isFeatured,
+    );
+    if (publishError) return { ok: false, error: publishError };
+
     const slug = await uniqueSlug(data.slug || data.name, id);
     await prisma.$transaction(async (tx) => {
       await tx.destinationImage.deleteMany({ where: { destinationId: id } });
       await tx.faq.deleteMany({ where: { destinationId: id } });
       await tx.destination.update({ where: { id }, data: { ...baseData(data), slug, ...nested(data) } });
     });
+
+    if (before.slug !== slug) {
+      await createSlugRedirect({
+        oldPath: `/destinations/${before.slug}`,
+        newPath: `/destinations/${slug}`,
+        note: `Destination slug changed from ${before.slug}`,
+      });
+    }
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "UPDATE",
+      entity: "Destination",
+      entityId: id,
+      description: `Updated destination "${data.name}"`,
+      metadata: before.slug !== slug ? { slug: { from: before.slug, to: slug } } : undefined,
+    });
+
     revalidatePath("/admin/destinations");
+    revalidatePath("/destinations");
     revalidatePath(`/destinations/${slug}`);
+    if (before.slug !== slug) revalidatePath(`/destinations/${before.slug}`);
     return { ok: true, id };
   } catch (err) {
-    console.error("[updateDestination]", err);
-    return { ok: false, error: "Could not update destination." };
+    return { ok: false, error: toSafeError(err, "action.updateDestination", { id }).message };
   }
 }
 
 export async function deleteDestination(id: string): Promise<ActionResult> {
-  try { await requireAdmin(); } catch { return { ok: false, error: "Not authorized." }; }
+  const guard = await guardAction("destinations:delete");
+  if (!guard.ok) return { ok: false, error: guard.error };
   try {
+    const dest = await prisma.destination.findUnique({
+      where: { id },
+      select: { name: true, slug: true },
+    });
+    if (!dest) return { ok: false, error: "Destination not found." };
+
     const pkgCount = await prisma.travelPackage.count({ where: { destinationId: id } });
     if (pkgCount > 0) return { ok: false, error: "Cannot delete: this destination has packages. Remove them first." };
     await prisma.destination.delete({ where: { id } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "DELETE",
+      entity: "Destination",
+      entityId: id,
+      description: `Deleted destination "${dest.name}"`,
+      metadata: { slug: dest.slug },
+    });
+
     revalidatePath("/admin/destinations");
+    revalidatePath("/destinations");
     return { ok: true, id };
-  } catch {
-    return { ok: false, error: "Could not delete destination." };
+  } catch (err) {
+    return { ok: false, error: toSafeError(err, "action.deleteDestination", { id }).message };
   }
 }
 
 export async function toggleDestinationFlag(id: string, field: "isPublished" | "isFeatured"): Promise<ActionResult> {
-  try { await requireAdmin(); } catch { return { ok: false, error: "Not authorized." }; }
+  const guard = await guardAction("destinations:publish");
+  if (!guard.ok) return { ok: false, error: guard.error };
   try {
-    const d = await prisma.destination.findUnique({ where: { id }, select: { isPublished: true, isFeatured: true } });
+    const d = await prisma.destination.findUnique({
+      where: { id },
+      select: { name: true, isPublished: true, isFeatured: true },
+    });
     if (!d) return { ok: false, error: "Not found." };
-    await prisma.destination.update({ where: { id }, data: { [field]: !d[field] } });
+
+    const next = !d[field];
+    await prisma.destination.update({ where: { id }, data: { [field]: next } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "STATUS_CHANGE",
+      entity: "Destination",
+      entityId: id,
+      description: `Set ${field} to ${next} on destination "${d.name}"`,
+      metadata: { field, from: d[field], to: next },
+    });
+
     revalidatePath("/admin/destinations");
     revalidatePath("/destinations");
     return { ok: true, id };
-  } catch {
-    return { ok: false, error: "Could not update." };
+  } catch (err) {
+    return { ok: false, error: toSafeError(err, "action.toggleDestinationFlag", { id, field }).message };
   }
 }

@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { guardAction } from "@/lib/guard";
+import { recordActivity } from "@/lib/activity";
+import { toSafeError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { sendMail } from "@/lib/email/mailer";
 import { getSettings } from "@/lib/settings";
 import { documentEmail } from "@/lib/email/document-email";
@@ -54,8 +57,8 @@ function toDate(value: string | null | undefined): Date | null {
 }
 
 export async function saveDocument(input: DocumentInput, id?: string): Promise<DocResult> {
-  const session = await auth();
-  if (!session?.user) return { ok: false, error: "Not authorized" };
+  const guard = await guardAction(id ? "documents:update" : "documents:create");
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const parsed = docSchema.safeParse(input);
   if (!parsed.success) {
@@ -108,11 +111,20 @@ export async function saveDocument(input: DocumentInput, id?: string): Promise<D
       data: {
         ...base,
         number: await nextDocumentNumber(d.kind as DocKind),
-        createdById: session.user.id,
+        createdById: guard.actor.id,
         items: { create: items },
       },
     });
   }
+
+  await recordActivity({
+    actor: guard.actor,
+    action: id ? "UPDATE" : "CREATE",
+    entity: "SalesDocument",
+    entityId: saved.id,
+    description: `${id ? "Updated" : "Created"} ${DOC_LABEL[d.kind as DocKind].one.toLowerCase()} ${saved.number}`,
+    metadata: { kind: d.kind, status: d.status, number: saved.number },
+  });
 
   const route = DOC_LABEL[d.kind as DocKind].route;
   revalidatePath(`/admin/${route}`);
@@ -121,24 +133,41 @@ export async function saveDocument(input: DocumentInput, id?: string): Promise<D
 }
 
 export async function updateDocumentStatus(id: string, status: string) {
-  const session = await auth();
-  if (!session?.user) return { ok: false as const, error: "Not authorized" };
+  const guard = await guardAction("documents:update");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
 
-  const doc = await prisma.salesDocument.findUnique({ where: { id }, select: { kind: true } });
+  const doc = await prisma.salesDocument.findUnique({
+    where: { id },
+    select: { kind: true, number: true, status: true },
+  });
   if (!doc) return { ok: false as const, error: "Document not found" };
   if (!DOC_STATUSES[doc.kind as DocKind].includes(status)) {
     return { ok: false as const, error: "Invalid status" };
   }
 
   await prisma.salesDocument.update({ where: { id }, data: { status } });
+
+  await recordActivity({
+    actor: guard.actor,
+    action: "STATUS_CHANGE",
+    entity: "SalesDocument",
+    entityId: id,
+    description: `Set ${doc.number} to ${status}`,
+    metadata: { from: doc.status, to: status },
+  });
+
   revalidatePath(`/admin/${DOC_LABEL[doc.kind as DocKind].route}`);
   return { ok: true as const };
 }
 
 export async function recordPayment(id: string, amount: number) {
-  const session = await auth();
-  if (!session?.user) return { ok: false as const, error: "Not authorized" };
-  if (!(amount > 0)) return { ok: false as const, error: "Enter an amount greater than zero" };
+  // Recording money against an invoice is an update to a financial record.
+  const guard = await guardAction("documents:update");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false as const, error: "Enter an amount greater than zero" };
+  }
+  if (amount > 100_000_000) return { ok: false as const, error: "That amount looks wrong" };
 
   const doc = await prisma.salesDocument.findUnique({ where: { id }, include: { items: true } });
   if (!doc) return { ok: false as const, error: "Document not found" };
@@ -157,14 +186,31 @@ export async function recordPayment(id: string, amount: number) {
     },
   });
 
+  logger.payment("manual_payment_recorded", {
+    documentId: id,
+    number: doc.number,
+    amount,
+    paidSoFar,
+    userId: guard.actor.id,
+  });
+
+  await recordActivity({
+    actor: guard.actor,
+    action: "PAYMENT",
+    entity: "SalesDocument",
+    entityId: id,
+    description: `Recorded a payment of ${amount} against ${doc.number}`,
+    metadata: { amount, paidSoFar, balance: totals.balance },
+  });
+
   revalidatePath(`/admin/invoices`);
   revalidatePath(`/admin/invoices/${id}`);
   return { ok: true as const };
 }
 
 export async function emailDocument(id: string) {
-  const session = await auth();
-  if (!session?.user) return { ok: false as const, error: "Not authorized" };
+  const guard = await guardAction("documents:send");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
 
   const doc = await prisma.salesDocument.findUnique({
     where: { id },
@@ -214,7 +260,7 @@ export async function emailDocument(id: string) {
       data: {
         leadId: doc.leadId,
         type: "EMAIL",
-        authorId: session.user.id,
+        authorId: guard.actor.id,
         subject: `${DOC_LABEL[kind].one} ${doc.number} sent`,
         emailTo: doc.customerEmail,
         delivered,
@@ -224,6 +270,15 @@ export async function emailDocument(id: string) {
     revalidatePath(`/admin/leads/${doc.leadId}`);
   }
 
+  await recordActivity({
+    actor: guard.actor,
+    action: "UPDATE",
+    entity: "SalesDocument",
+    entityId: id,
+    description: `Emailed ${DOC_LABEL[kind].one.toLowerCase()} ${doc.number} to the customer`,
+    metadata: { delivered },
+  });
+
   revalidatePath(`/admin/${DOC_LABEL[kind].route}`);
   return delivered
     ? { ok: true as const }
@@ -231,19 +286,40 @@ export async function emailDocument(id: string) {
 }
 
 export async function deleteDocument(id: string) {
-  const session = await auth();
-  if (!session?.user) return { ok: false as const, error: "Not authorized" };
+  const guard = await guardAction("documents:delete");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
 
-  const doc = await prisma.salesDocument.findUnique({ where: { id }, select: { kind: true } });
-  await prisma.salesDocument.delete({ where: { id } });
-  if (doc) revalidatePath(`/admin/${DOC_LABEL[doc.kind as DocKind].route}`);
-  return { ok: true as const };
+  try {
+    const doc = await prisma.salesDocument.findUnique({
+      where: { id },
+      select: { kind: true, number: true },
+    });
+    if (!doc) return { ok: false as const, error: "Document not found" };
+
+    await prisma.salesDocument.delete({ where: { id } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "DELETE",
+      entity: "SalesDocument",
+      entityId: id,
+      description: `Deleted ${DOC_LABEL[doc.kind as DocKind].one.toLowerCase()} ${doc.number}`,
+    });
+
+    revalidatePath(`/admin/${DOC_LABEL[doc.kind as DocKind].route}`);
+    return { ok: true as const };
+  } catch (err) {
+    return { ok: false as const, error: toSafeError(err, "action.deleteDocument", { id }).message };
+  }
 }
 
 /** Prefill a new document straight from a lead. */
 export async function createDocumentFromLead(leadId: string, kind: DocKind): Promise<DocResult> {
-  const session = await auth();
-  if (!session?.user) return { ok: false, error: "Not authorized" };
+  const guard = await guardAction("documents:create");
+  if (!guard.ok) return { ok: false, error: guard.error };
+  if (kind !== "QUOTATION" && kind !== "INVOICE") {
+    return { ok: false, error: "Unknown document type" };
+  }
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) return { ok: false, error: "Lead not found" };
@@ -254,7 +330,7 @@ export async function createDocumentFromLead(leadId: string, kind: DocKind): Pro
       number: await nextDocumentNumber(kind),
       status: "DRAFT",
       leadId: lead.id,
-      createdById: session.user.id,
+      createdById: guard.actor.id,
       customerName: lead.name,
       customerEmail: lead.email,
       customerPhone: lead.phone,
@@ -274,6 +350,15 @@ export async function createDocumentFromLead(leadId: string, kind: DocKind): Pro
         ],
       },
     },
+  });
+
+  await recordActivity({
+    actor: guard.actor,
+    action: "CREATE",
+    entity: "SalesDocument",
+    entityId: doc.id,
+    description: `Created ${DOC_LABEL[kind].one.toLowerCase()} ${doc.number} from lead "${lead.name}"`,
+    metadata: { leadId: lead.id, number: doc.number },
   });
 
   revalidatePath(`/admin/${DOC_LABEL[kind].route}`);

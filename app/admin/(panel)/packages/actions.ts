@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { guardAction } from "@/lib/guard";
+import { publishBlocked } from "@/lib/permissions";
+import { recordActivity } from "@/lib/activity";
+import { createSlugRedirect } from "@/lib/redirects";
+import { toSafeError } from "@/lib/errors";
 import { packageSchema, type PackageInput } from "@/lib/validation";
 import { slugify, serializeList } from "@/lib/utils";
 
@@ -60,11 +64,8 @@ function nestedCreateData(data: PackageInput) {
 }
 
 export async function createPackage(input: PackageInput): Promise<ActionResult> {
-  try {
-    await requireAdmin();
-  } catch {
-    return { ok: false, error: "Not authorized." };
-  }
+  const guard = await guardAction("packages:create");
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const parsed = packageSchema.safeParse(input);
   if (!parsed.success) {
@@ -94,25 +95,31 @@ export async function createPackage(input: PackageInput): Promise<ActionResult> 
         bookingEnabled: data.bookingEnabled,
         seoTitle: data.seoTitle || null,
         seoDescription: data.seoDescription || null,
+        tags: serializeList(data.tags.filter(Boolean)),
         highlights: serializeList(data.highlights.filter(Boolean)),
         ...nestedCreateData(data),
       },
     });
+    await recordActivity({
+      actor: guard.actor,
+      action: "CREATE",
+      entity: "TravelPackage",
+      entityId: pkg.id,
+      description: `Created package "${pkg.name}"`,
+      metadata: { slug, published: data.published },
+    });
+
     revalidatePath("/admin/packages");
     revalidatePath("/packages");
     return { ok: true, id: pkg.id };
   } catch (err) {
-    console.error("[createPackage]", err);
-    return { ok: false, error: "Could not create package." };
+    return { ok: false, error: toSafeError(err, "action.createPackage").message };
   }
 }
 
 export async function updatePackage(id: string, input: PackageInput): Promise<ActionResult> {
-  try {
-    await requireAdmin();
-  } catch {
-    return { ok: false, error: "Not authorized." };
-  }
+  const guard = await guardAction("packages:update");
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const parsed = packageSchema.safeParse(input);
   if (!parsed.success) {
@@ -121,6 +128,20 @@ export async function updatePackage(id: string, input: PackageInput): Promise<Ac
   const data = parsed.data;
 
   try {
+    const before = await prisma.travelPackage.findUnique({
+      where: { id },
+      select: { slug: true, name: true, published: true, featured: true },
+    });
+    if (!before) return { ok: false, error: "Package not found." };
+
+    // Publishing state is a separate permission from editing copy.
+    const publishError = publishBlocked(
+      guard.actor.role,
+      "packages:publish",
+      before.published !== data.published || before.featured !== data.featured,
+    );
+    if (publishError) return { ok: false, error: publishError };
+
     const slug = await uniqueSlug(data.slug || data.name, id);
     // Replace nested children wholesale for clean repeater semantics.
     await prisma.$transaction(async (tx) => {
@@ -153,37 +174,75 @@ export async function updatePackage(id: string, input: PackageInput): Promise<Ac
           bookingEnabled: data.bookingEnabled,
           seoTitle: data.seoTitle || null,
           seoDescription: data.seoDescription || null,
+          tags: serializeList(data.tags.filter(Boolean)),
           highlights: serializeList(data.highlights.filter(Boolean)),
           ...nestedCreateData(data),
         },
       });
     });
+    // Keep the indexed URL working when an editor renames a package.
+    if (before.slug !== slug) {
+      await createSlugRedirect({
+        oldPath: `/packages/${before.slug}`,
+        newPath: `/packages/${slug}`,
+        note: `Package slug changed from ${before.slug}`,
+      });
+    }
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "UPDATE",
+      entity: "TravelPackage",
+      entityId: id,
+      description: `Updated package "${data.name}"`,
+      metadata: {
+        ...(before.slug !== slug ? { slug: { from: before.slug, to: slug } } : {}),
+        ...(before.published !== data.published
+          ? { published: { from: before.published, to: data.published } }
+          : {}),
+      },
+    });
+
     revalidatePath("/admin/packages");
+    revalidatePath("/packages");
     revalidatePath(`/packages/${slug}`);
+    if (before.slug !== slug) revalidatePath(`/packages/${before.slug}`);
     return { ok: true, id };
   } catch (err) {
-    console.error("[updatePackage]", err);
-    return { ok: false, error: "Could not update package." };
+    return { ok: false, error: toSafeError(err, "action.updatePackage", { id }).message };
   }
 }
 
 export async function deletePackage(id: string): Promise<ActionResult> {
+  const guard = await guardAction("packages:delete");
+  if (!guard.ok) return { ok: false, error: guard.error };
   try {
-    await requireAdmin();
-  } catch {
-    return { ok: false, error: "Not authorized." };
-  }
-  try {
+    const pkg = await prisma.travelPackage.findUnique({
+      where: { id },
+      select: { name: true, slug: true },
+    });
+    if (!pkg) return { ok: false, error: "Package not found." };
+
     const bookings = await prisma.booking.count({ where: { packageId: id } });
     if (bookings > 0) {
       return { ok: false, error: "Cannot delete: this package has bookings. Unpublish it instead." };
     }
     await prisma.travelPackage.delete({ where: { id } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "DELETE",
+      entity: "TravelPackage",
+      entityId: id,
+      description: `Deleted package "${pkg.name}"`,
+      metadata: { slug: pkg.slug },
+    });
+
     revalidatePath("/admin/packages");
+    revalidatePath("/packages");
     return { ok: true, id };
   } catch (err) {
-    console.error("[deletePackage]", err);
-    return { ok: false, error: "Could not delete package." };
+    return { ok: false, error: toSafeError(err, "action.deletePackage", { id }).message };
   }
 }
 
@@ -191,19 +250,31 @@ export async function togglePackageFlag(
   id: string,
   field: "published" | "featured",
 ): Promise<ActionResult> {
+  const guard = await guardAction("packages:publish");
+  if (!guard.ok) return { ok: false, error: guard.error };
   try {
-    await requireAdmin();
-  } catch {
-    return { ok: false, error: "Not authorized." };
-  }
-  try {
-    const pkg = await prisma.travelPackage.findUnique({ where: { id }, select: { published: true, featured: true } });
+    const pkg = await prisma.travelPackage.findUnique({
+      where: { id },
+      select: { name: true, published: true, featured: true },
+    });
     if (!pkg) return { ok: false, error: "Not found." };
-    await prisma.travelPackage.update({ where: { id }, data: { [field]: !pkg[field] } });
+
+    const next = !pkg[field];
+    await prisma.travelPackage.update({ where: { id }, data: { [field]: next } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "STATUS_CHANGE",
+      entity: "TravelPackage",
+      entityId: id,
+      description: `Set ${field} to ${next} on package "${pkg.name}"`,
+      metadata: { field, from: pkg[field], to: next },
+    });
+
     revalidatePath("/admin/packages");
     revalidatePath("/packages");
     return { ok: true, id };
-  } catch {
-    return { ok: false, error: "Could not update." };
+  } catch (err) {
+    return { ok: false, error: toSafeError(err, "action.togglePackageFlag", { id, field }).message };
   }
 }

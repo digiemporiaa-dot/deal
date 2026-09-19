@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Package, MapPin, CalendarCheck, Users, MessageSquare,
   Star, FileText, Files, Tag, Image as ImageIcon, Settings, UserCog, Menu, X, Plane, LogOut, ClipboardList,
-  FileSpreadsheet, ReceiptIndianRupee, BarChart3, Shuffle, Download,
+  FileSpreadsheet, ReceiptIndianRupee, BarChart3, Shuffle, Download, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccessSection } from "@/lib/permissions";
@@ -20,6 +20,7 @@ const NAV = [
   { href: "/admin/leads", label: "Leads", icon: ClipboardList },
   { href: "/admin/redirects", label: "Redirects", icon: Shuffle },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
+  { href: "/admin/activity-log", label: "Activity Log", icon: Activity },
   { href: "/admin/quotations", label: "Quotations", icon: FileSpreadsheet },
   { href: "/admin/invoices", label: "Invoices", icon: ReceiptIndianRupee },
   { href: "/admin/testimonials", label: "Testimonials", icon: Star },

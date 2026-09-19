@@ -3,10 +3,14 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/admin/ui";
 import { DestinationForm } from "@/components/admin/DestinationForm";
 import { parseList } from "@/lib/utils";
+import { SeoPanelLoader } from "@/components/admin/SeoPanelLoader";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditDestinationPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePermission("destinations:update");
+
   const { id } = await params;
   const d = await prisma.destination.findUnique({
     where: { id },
@@ -28,6 +32,7 @@ export default async function EditDestinationPage({ params }: { params: Promise<
     <div>
       <PageHeader title="Edit Destination" description={d.name} />
       <DestinationForm initial={initial} destinationId={d.id} />
+      <SeoPanelLoader entityType="DESTINATION" entityId={d.id} previewPath={`/destinations/${d.slug}`} />
     </div>
   );
 }

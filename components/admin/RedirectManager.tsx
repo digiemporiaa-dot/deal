@@ -12,7 +12,7 @@ export type RedirectRow = {
   id: string;
   source: string;
   target: string;
-  permanent: boolean;
+  statusCode: number;
   isActive: boolean;
   hits: number;
   note: string | null;
@@ -22,7 +22,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
   const router = useRouter();
   const [source, setSource] = React.useState("");
   const [target, setTarget] = React.useState("");
-  const [permanent, setPermanent] = React.useState("301");
+  const [statusCode, setStatusCode] = React.useState("301");
   const [note, setNote] = React.useState("");
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -33,7 +33,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
     const res = await saveRedirect({
       source,
       target,
-      permanent: permanent === "301",
+      statusCode: Number(statusCode),
       isActive: true,
       note,
     });
@@ -62,9 +62,11 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
           </div>
           <div>
             <Label>Type</Label>
-            <Select value={permanent} onChange={(e) => setPermanent(e.target.value)}>
+            <Select value={statusCode} onChange={(e) => setStatusCode(e.target.value)}>
               <option value="301">Permanent (301) — moved for good</option>
               <option value="302">Temporary (302) — will come back</option>
+              <option value="308">Permanent, keep method (308)</option>
+              <option value="307">Temporary, keep method (307)</option>
             </Select>
           </div>
           <div>
@@ -117,7 +119,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
                       {r.note && <p className="mt-1 text-xs text-slate-400">{r.note}</p>}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge tone={r.permanent ? "brand" : "amber"}>{r.permanent ? "301" : "302"}</Badge>
+                      <Badge tone={r.statusCode === 301 || r.statusCode === 308 ? "brand" : "amber"}>{r.statusCode}</Badge>
                     </td>
                     <td className="px-4 py-3 text-center text-slate-600">{r.hits}</td>
                     <td className="px-4 py-3">

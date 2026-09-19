@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { leadSchema } from "@/lib/validation";
+import { createLead } from "@/lib/services/lead";
 import { sendMail, ADMIN_NOTIFY_EMAIL } from "@/lib/email/mailer";
 import { newLeadAdminEmail } from "@/lib/email/templates";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { limitFor } from "@/lib/rate-limit";
+import { ipFromRequest } from "@/lib/guard";
+import { toSafeError } from "@/lib/errors";
+
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  // Basic rate limiting per IP to prevent spam.
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (!checkRateLimit(`lead:${ip}`, 8, 60_000)) {
+  const ip = ipFromRequest(request);
+
+  const throttle = limitFor("lead", ip);
+  if (!throttle.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many requests. Please try again in a minute." },
-      { status: 429 },
+      { status: 429, headers: { "Retry-After": String(throttle.retryAfter) } },
     );
   }
 
@@ -26,27 +30,19 @@ export async function POST(request: Request) {
   const parsed = leadSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: "Please check the form and try again.", issues: parsed.error.flatten().fieldErrors },
+      {
+        ok: false,
+        error: "Please check the form and try again.",
+        issues: parsed.error.flatten().fieldErrors,
+      },
       { status: 422 },
     );
   }
 
   const d = parsed.data;
   try {
-    const lead = await prisma.lead.create({
-      data: {
-        name: d.name,
-        email: d.email || null,
-        phone: d.phone,
-        whatsapp: d.whatsapp || null,
-        destination: d.destination || null,
-        travelDate: d.travelDate ? new Date(d.travelDate) : null,
-        travellers: d.travellers ?? null,
-        budget: d.budget || null,
-        message: d.message || null,
-        source: d.source || "website",
-      },
-    });
+    // Attribution is read from the httpOnly cookie inside createLead().
+    const lead = await createLead(d);
 
     // Fire-and-forget admin notification (never blocks the response).
     void sendMail({
@@ -64,7 +60,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, id: lead.id });
   } catch (err) {
-    console.error("[api/leads] error", err);
+    toSafeError(err, "api.leads.create", { ip });
     return NextResponse.json(
       { ok: false, error: "Something went wrong. Please try again or WhatsApp us." },
       { status: 500 },

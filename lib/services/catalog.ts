@@ -68,10 +68,13 @@ export async function getPackages(filters: PackageFilters) {
   const where: Prisma.TravelPackageWhereInput = { published: true };
 
   if (filters.q) {
+    // `contains` is case-sensitive on PostgreSQL — searching for "bali" must
+    // still match "Bali".
+    const q = filters.q.trim();
     where.OR = [
-      { name: { contains: filters.q } },
-      { shortDescription: { contains: filters.q } },
-      { destination: { name: { contains: filters.q } } },
+      { name: { contains: q, mode: "insensitive" } },
+      { shortDescription: { contains: q, mode: "insensitive" } },
+      { destination: { name: { contains: q, mode: "insensitive" } } },
     ];
   }
   if (filters.destination) where.destination = { slug: filters.destination };
@@ -128,10 +131,26 @@ export function getTestimonials(limit = 6) {
   });
 }
 
+/**
+ * Published posts for listings and cards.
+ *
+ * `content` is deliberately not selected: an article body is large and a card
+ * never renders it, so fetching it would move megabytes for nothing.
+ */
 export function getBlogPosts(limit?: number) {
   return prisma.blogPost.findMany({
     where: { status: "PUBLISHED" },
-    include: { category: true, author: { select: { name: true } } },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      excerpt: true,
+      coverImage: true,
+      publishedAt: true,
+      featured: true,
+      category: { select: { id: true, name: true, slug: true } },
+      author: { select: { name: true } },
+    },
     take: limit,
     orderBy: { publishedAt: "desc" },
   });
@@ -140,6 +159,11 @@ export function getBlogPosts(limit?: number) {
 export function getBlogPostBySlug(slug: string) {
   return prisma.blogPost.findFirst({
     where: { slug, status: "PUBLISHED" },
-    include: { category: true, author: { select: { name: true } } },
+    include: {
+      category: true,
+      author: { select: { name: true } },
+      // Editorial links, used to build the internal-linking sections.
+      destination: { select: { id: true, name: true, slug: true, country: true } },
+    },
   });
 }

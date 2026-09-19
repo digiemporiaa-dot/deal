@@ -139,7 +139,7 @@ export function PageForm({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
           <h2 className="font-semibold text-slate-900">Page settings</h2>
-          <div><Label>Slug (URL)</Label><Input {...register("slug")} placeholder="about" /><p className="mt-1 text-xs text-slate-500">The page shows at yoursite.com/slug — for example "about" makes /about. Be careful changing this on an existing page.</p></div>
+          <div><Label>Slug (URL)</Label><Input {...register("slug")} placeholder="about" /><p className="mt-1 text-xs text-slate-500">The page shows at yoursite.com/slug — for example &ldquo;about&rdquo; makes /about. Be careful changing this on an existing page.</p></div>
           <div><Label>Status</Label>
             <Select {...register("status")}>
               <option value="PUBLISHED">Published</option>
@@ -189,7 +189,7 @@ export function PageForm({
               </div>
             </div>
           ))}
-          {faqArray.fields.length === 0 && <p className="text-sm text-slate-400">No FAQs — click "Add FAQ" if you want a FAQ section on this page.</p>}
+          {faqArray.fields.length === 0 && <p className="text-sm text-slate-400">No FAQs — click &ldquo;Add FAQ&rdquo; if you want a FAQ section on this page.</p>}
         </div>
       </div>
 

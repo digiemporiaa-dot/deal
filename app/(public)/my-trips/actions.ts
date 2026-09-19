@@ -2,11 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { z } from "zod";
 import {
   createCustomerSession,
   clearCustomerSession,
   phoneMatches,
 } from "@/lib/customer-session";
+import { limitFor } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/guard";
+import { logger } from "@/lib/logger";
+
+const loginInput = z.object({
+  bookingNumber: z.string().trim().min(3).max(40),
+  contact: z.string().trim().min(3).max(200),
+});
 
 /**
  * Sign in with a booking number plus the phone or email used for that booking.
@@ -14,9 +23,23 @@ import {
  * avoids storing another set of passwords.
  */
 export async function customerLogin(bookingNumber: string, contact: string) {
-  const number = bookingNumber.trim().toUpperCase();
-  const value = contact.trim();
-  if (!number || !value) return { ok: false as const, error: "Enter your booking number and phone or email" };
+  // Without a throttle this is an oracle for guessing booking numbers.
+  const ip = await clientIp();
+  const throttle = limitFor("login", `customer:${ip}`);
+  if (!throttle.ok) {
+    logger.security("customer_login_rate_limited", { ip });
+    return {
+      ok: false as const,
+      error: "Too many attempts. Please wait a few minutes and try again.",
+    };
+  }
+
+  const parsed = loginInput.safeParse({ bookingNumber, contact });
+  if (!parsed.success) {
+    return { ok: false as const, error: "Enter your booking number and phone or email" };
+  }
+  const number = parsed.data.bookingNumber.toUpperCase();
+  const value = parsed.data.contact;
 
   const booking = await prisma.booking.findUnique({
     where: { bookingNumber: number },
@@ -32,9 +55,13 @@ export async function customerLogin(bookingNumber: string, contact: string) {
     : false;
   const matchesPhone = !value.includes("@") ? phoneMatches(value, booking.customer.phone) : false;
 
-  if (!matchesEmail && !matchesPhone) return failure;
+  if (!matchesEmail && !matchesPhone) {
+    logger.security("customer_login_failed", { ip, bookingNumber: number });
+    return failure;
+  }
 
   await createCustomerSession(booking.customer.id);
+  logger.auth("customer_login_success", { customerId: booking.customer.id });
   revalidatePath("/my-trips");
   return { ok: true as const };
 }

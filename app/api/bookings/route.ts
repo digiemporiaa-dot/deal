@@ -6,12 +6,21 @@ import { isRazorpayConfigured, createRazorpayOrder } from "@/lib/razorpay";
 import { toNumber } from "@/lib/utils";
 import { sendMail, ADMIN_NOTIFY_EMAIL } from "@/lib/email/mailer";
 import { newBookingAdminEmail } from "@/lib/email/templates";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { limitFor } from "@/lib/rate-limit";
+import { ipFromRequest } from "@/lib/guard";
+import { logger } from "@/lib/logger";
+import { toSafeError, isAppError } from "@/lib/errors";
+
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (!checkRateLimit(`booking:${ip}`, 10, 60_000)) {
-    return NextResponse.json({ ok: false, error: "Too many attempts. Try again shortly." }, { status: 429 });
+  const ip = ipFromRequest(request);
+  const throttle = limitFor("booking", ip);
+  if (!throttle.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(throttle.retryAfter) } },
+    );
   }
 
   let body: unknown;
@@ -30,7 +39,17 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Every amount below comes from createBooking(), which prices the booking
+    // from the database. Nothing the browser submitted is trusted.
     const { booking, price } = await createBooking(parsed.data);
+
+    logger.info("booking.created", {
+      bookingNumber: booking.bookingNumber,
+      packageId: booking.packageId,
+      totalAmount: price.totalAmount,
+      advanceAmount: price.advanceAmount,
+      currency: price.currency,
+    });
 
     // Notify admin of the new booking (fire-and-forget).
     void sendMail({
@@ -67,6 +86,13 @@ export async function POST(request: Request) {
         },
       });
 
+      logger.payment("order_created", {
+        bookingNumber: booking.bookingNumber,
+        orderId: order.id,
+        amount: toNumber(booking.advanceAmount),
+        currency: booking.currency,
+      });
+
       return NextResponse.json({
         ok: true,
         payment: "razorpay",
@@ -86,8 +112,20 @@ export async function POST(request: Request) {
       breakdown: price,
     });
   } catch (err) {
-    console.error("[api/bookings] error", err);
-    const message = err instanceof Error ? err.message : "Could not create booking";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    const safe = toSafeError(err, "api.bookings.create", { ip });
+    // Messages such as "Package not available" are written for the customer;
+    // anything else is reported generically so internals do not leak.
+    const message = isAppError(err) || isExpectedBookingError(err) ? (err as Error).message : safe.message;
+    return NextResponse.json({ ok: false, error: message }, { status: safe.status });
   }
+}
+
+/** Business rules thrown by createBooking() that are safe to show. */
+function isExpectedBookingError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return [
+    "Package not available",
+    "Booking is disabled for this package",
+    "Package not found",
+  ].includes(err.message);
 }

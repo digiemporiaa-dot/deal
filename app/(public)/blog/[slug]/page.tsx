@@ -3,26 +3,40 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getBlogPostBySlug } from "@/lib/services/catalog";
 import { formatDate } from "@/lib/utils";
+import { excerptFrom } from "@/lib/sanitize";
 import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  buildMetadata,
+  getSeoMeta,
+  articleSchema,
+  breadcrumbSchema,
+  extraSchema,
+} from "@/lib/seo";
 import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
+import { getRelatedBlogs, getRelatedPackages, getRelatedDestinations } from "@/lib/related";
+import { RelatedBlogs, RelatedPackages, RelatedDestinations } from "@/components/site/RelatedContent";
+import { parseList } from "@/lib/utils";
 
 type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const post = await getBlogPostBySlug(slug);
-  if (!post) return { title: "Post not found" };
-  return {
-    title: post.seoTitle || post.title,
-    description: post.seoDescription || post.excerpt || undefined,
-    alternates: { canonical: `/blog/${post.slug}` },
-    openGraph: {
-      type: "article",
+  if (!post) return { title: "Post not found", robots: { index: false, follow: false } };
+
+  const overrides = await getSeoMeta("BLOG", post.id);
+  return buildMetadata(
+    {
+      path: `/blog/${post.slug}`,
       title: post.seoTitle || post.title,
-      description: post.seoDescription || post.excerpt || undefined,
-      images: post.coverImage ? [post.coverImage] : undefined,
+      description: post.seoDescription || post.excerpt || excerptFrom(post.content, 158),
+      image: post.coverImage,
+      publishedAt: post.publishedAt,
+      updatedAt: post.updatedAt,
+      type: "article",
     },
-  };
+    overrides,
+  );
 }
 
 export default async function BlogPostPage({ params }: Params) {
@@ -30,20 +44,57 @@ export default async function BlogPostPage({ params }: Params) {
   const post = await getBlogPostBySlug(slug);
   if (!post) notFound();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const tags = parseList(post.tags);
+
+  const [overrides, article, relatedPosts, relatedPackages, relatedDestinations] = await Promise.all([
+    getSeoMeta("BLOG", post.id),
+    articleSchema({
+      title: post.title,
+      description: post.excerpt || excerptFrom(post.content, 200),
+      path: `/blog/${post.slug}`,
+      image: post.coverImage,
+      authorName: post.author?.name ?? null,
+      publishedAt: post.publishedAt,
+      updatedAt: post.updatedAt,
+    }),
+    getRelatedBlogs({
+      excludeId: post.id,
+      destinationId: post.destinationId,
+      packageId: post.packageId,
+      categoryId: post.categoryId,
+      tags,
+      limit: 3,
+    }),
+    // A guide about a destination should lead somewhere bookable.
+    post.destinationId
+      ? getRelatedPackages({
+          packageId: post.packageId ?? "",
+          destinationId: post.destinationId,
+          tags,
+          limit: 3,
+        })
+      : Promise.resolve([]),
+    post.destination
+      ? getRelatedDestinations({
+          destinationId: post.destination.id,
+          country: post.destination.country,
+          limit: 4,
+        })
+      : Promise.resolve([]),
+  ]);
 
   return (
     <article className="container-page max-w-3xl py-14">
       <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "Article",
-          headline: post.title,
-          image: post.coverImage,
-          datePublished: post.publishedAt?.toISOString(),
-          author: { "@type": "Organization", name: "Vacationdeal" },
-          mainEntityOfPage: `${siteUrl}/blog/${post.slug}`,
-        }}
+        data={[
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Travel Guides", path: "/blog" },
+            { name: post.title, path: `/blog/${post.slug}` },
+          ]),
+          article,
+          ...extraSchema(overrides?.schemaJson),
+        ]}
       />
       {post.category && <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">{post.category.name}</p>}
       <h1 className="mt-2 font-display text-4xl font-bold text-slate-900">{post.title}</h1>
@@ -62,6 +113,13 @@ export default async function BlogPostPage({ params }: Params) {
         <p className="mt-1 text-sm text-slate-600">Let our experts plan your perfect trip.</p>
         <EnquiryButton label="Plan My Trip" title="Plan My Trip" className="mt-4" />
       </div>
+
+      <RelatedPackages
+        packages={relatedPackages}
+        title={post.destination ? `Packages in ${post.destination.name}` : "Packages you can book"}
+      />
+      <RelatedDestinations destinations={relatedDestinations} title="Where to go next" />
+      <RelatedBlogs posts={relatedPosts} title="More travel guides" />
     </article>
   );
 }

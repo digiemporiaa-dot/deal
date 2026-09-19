@@ -3,10 +3,15 @@ import { PageHeader } from "@/components/admin/ui";
 import { CouponManager } from "@/components/admin/CouponManager";
 import { toNumber } from "@/lib/utils";
 import type { DiscountType } from "@/types/db-enums";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function CouponsPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("coupons:view");
+
   const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: "desc" } });
   return (
     <div>

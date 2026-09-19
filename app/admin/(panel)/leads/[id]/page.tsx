@@ -10,8 +10,10 @@ import { LeadEmailForm } from "@/components/admin/LeadEmailForm";
 import { LeadFollowUp } from "@/components/admin/LeadFollowUp";
 import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
 import { LeadDocumentButton } from "@/components/admin/LeadDocumentButton";
-import { auth } from "@/lib/auth";
+import { requirePermission, currentUser } from "@/lib/guard";
 import { isLeadOwnerOnly, canAssignLeads } from "@/lib/permissions";
+import { leadSourceLabel } from "@/lib/crm";
+import { LeadPrioritySelect } from "@/components/admin/LeadPrioritySelect";
 import { formatDate } from "@/lib/utils";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 
@@ -19,8 +21,9 @@ export const dynamic = "force-dynamic";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  const role = (session?.user as { role?: string } | undefined)?.role;
+  await requirePermission("leads:view");
+  const actor = await currentUser();
+  const role = actor?.role;
   const ownLeadsOnly = isLeadOwnerOnly(role);
   const mayAssign = canAssignLeads(role);
 
@@ -43,7 +46,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (!lead) notFound();
 
   // A sales executive may only open a lead that belongs to them.
-  if (ownLeadsOnly && lead.assignedToId !== session?.user?.id) notFound();
+  if (ownLeadsOnly && lead.assignedToId !== actor?.id) notFound();
 
   const emailCount = lead.notes.filter((n) => n.type === "EMAIL").length;
   const callCount = lead.notes.filter((n) => n.type === "CALL").length;
@@ -70,9 +73,22 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <Detail label="WhatsApp" value={lead.whatsapp || "—"} />
               <Detail label="Destination" value={lead.destination || "—"} />
               <Detail label="Travel date" value={lead.travelDate ? formatDate(lead.travelDate) : "—"} />
-              <Detail label="Travellers" value={lead.travellers ? String(lead.travellers) : "—"} />
+              <Detail
+                label="Travellers"
+                value={
+                  lead.adults || lead.children
+                    ? `${lead.adults ?? 0} adult${(lead.adults ?? 0) === 1 ? "" : "s"}${
+                        lead.children ? `, ${lead.children} child${lead.children === 1 ? "" : "ren"}` : ""
+                      }`
+                    : lead.travellers
+                      ? String(lead.travellers)
+                      : "—"
+                }
+              />
+              <Detail label="Return date" value={lead.returnDate ? formatDate(lead.returnDate) : "—"} />
+              <Detail label="Country" value={lead.country || "—"} />
               <Detail label="Budget" value={lead.budget || "—"} />
-              <Detail label="Source" value={lead.source} />
+              <Detail label="Source" value={leadSourceLabel(lead.source)} />
             </dl>
             {lead.message && (
               <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{lead.message}</div>
@@ -108,9 +124,33 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
 
           <Card className="p-5">
+            <h2 className="mb-3 font-semibold text-slate-900">Priority</h2>
+            <LeadPrioritySelect leadId={lead.id} value={lead.priority} />
+          </Card>
+
+          <Card className="p-5">
             <h2 className="mb-3 font-semibold text-slate-900">Next follow-up</h2>
             <LeadFollowUp leadId={lead.id} current={lead.nextFollowUpAt ? lead.nextFollowUpAt.toISOString() : null} />
           </Card>
+
+          {/* Where this enquiry actually came from, captured server-side on
+              the visitor's first page view. */}
+          {(lead.campaign || lead.medium || lead.referrer || lead.landingPage || lead.gclid || lead.fbclid) && (
+            <Card className="p-5">
+              <h2 className="mb-3 font-semibold text-slate-900">Marketing attribution</h2>
+              <dl className="space-y-2 text-sm">
+                <Detail label="Channel" value={leadSourceLabel(lead.source)} />
+                <Detail label="Medium" value={lead.medium || "—"} />
+                <Detail label="Campaign" value={lead.campaign || "—"} />
+                <Detail label="Term" value={lead.term || "—"} />
+                <Detail label="Content" value={lead.content || "—"} />
+                <Detail label="Landing page" value={lead.landingPage || "—"} />
+                <Detail label="Referrer" value={lead.referrer || "—"} />
+                {lead.gclid && <Detail label="Google click id" value={lead.gclid} />}
+                {lead.fbclid && <Detail label="Meta click id" value={lead.fbclid} />}
+              </dl>
+            </Card>
+          )}
 
           <Card className="p-5">
             <h2 className="mb-3 font-semibold text-slate-900">Quotation</h2>

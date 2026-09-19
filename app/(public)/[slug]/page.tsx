@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { resolveRedirect } from "@/lib/redirects";
+import { buildMetadata, getSeoMeta, breadcrumbSchema, faqSchema, extraSchema } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { Faqs } from "@/components/site/Faqs";
 import { PreviewBanner } from "@/components/site/PreviewBanner";
 
@@ -25,24 +28,19 @@ async function getPage(slug: string, allowDraft: boolean) {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const page = await getPage(slug, false);
-  if (!page) return { title: "Page not found" };
-  return {
-    title: page.seoTitle || page.title,
-    description: page.seoDescription || undefined,
-    alternates: { canonical: `/${page.slug}` },
-    openGraph: {
+  if (!page) return { title: "Page not found", robots: { index: false, follow: false } };
+
+  const overrides = await getSeoMeta("PAGE", page.id);
+  return buildMetadata(
+    {
+      path: `/${page.slug}`,
       title: page.seoTitle || page.title,
-      description: page.seoDescription || undefined,
-      type: "website",
-      ...(page.ogImage ? { images: [{ url: page.ogImage, width: 1200, height: 630 }] } : {}),
+      description: page.seoDescription,
+      image: page.ogImage,
+      updatedAt: page.updatedAt,
     },
-    twitter: {
-      card: page.ogImage ? "summary_large_image" : "summary",
-      title: page.seoTitle || page.title,
-      description: page.seoDescription || undefined,
-      ...(page.ogImage ? { images: [page.ogImage] } : {}),
-    },
-  };
+    overrides,
+  );
 }
 
 export default async function CmsPage({ params, searchParams }: Params) {
@@ -57,41 +55,34 @@ export default async function CmsPage({ params, searchParams }: Params) {
 
   if (!page) {
     // Before giving up, honour a redirect the team saved for this address.
-    const rule = await prisma.redirect.findFirst({
-      where: { source: `/${slug}`, isActive: true },
-    });
+    // resolveRedirect() follows chains and refuses loops.
+    const rule = await resolveRedirect(`/${slug}`);
     if (rule) {
-      await prisma.redirect.update({ where: { id: rule.id }, data: { hits: { increment: 1 } } });
+      if (rule.statusCode === 301 || rule.statusCode === 308) permanentRedirect(rule.target);
       redirect(rule.target);
     }
     notFound();
   }
 
   const isDraft = page.status !== "PUBLISHED";
+  const overrides = await getSeoMeta("PAGE", page.id);
 
-  const faqSchema =
-    page.faqs.length > 0 && !isDraft
-      ? {
-          "@context": "https://schema.org",
-          "@type": "FAQPage",
-          mainEntity: page.faqs.map((f: { question: string; answer: string }) => ({
-            "@type": "Question",
-            name: f.question,
-            acceptedAnswer: { "@type": "Answer", text: f.answer },
-          })),
-        }
-      : null;
+  // A draft is only ever visible to a signed-in admin, so its FAQs are not
+  // public content and must not be published as structured data.
+  const schema = [
+    breadcrumbSchema([
+      { name: "Home", path: "/" },
+      { name: page.title, path: `/${page.slug}` },
+    ]),
+    ...(page.faqs.length > 0 && !isDraft ? [faqSchema(page.faqs)!] : []),
+    ...(isDraft ? [] : extraSchema(overrides?.schemaJson)),
+  ];
 
   return (
     <>
       {isDraft && <PreviewBanner title={page.title} editHref={`/admin/pages/${page.id}`} />}
       <div className="container-page max-w-3xl py-14">
-        {faqSchema && (
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-          />
-        )}
+        {!isDraft && <JsonLd data={schema} />}
         <h1 className="font-display text-4xl font-bold text-slate-900">{page.title}</h1>
         <div className="prose-content mt-6" dangerouslySetInnerHTML={{ __html: page.content }} />
         {page.faqs.length > 0 && (

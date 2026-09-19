@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatCurrency, toNumber } from "@/lib/utils";
 import { PackageRowActions } from "@/components/admin/PackageRowActions";
 import type { Prisma } from "@prisma/client";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,10 @@ export default async function AdminPackagesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("packages:view");
+
   const sp = await searchParams;
   const where: Prisma.TravelPackageWhereInput = {};
   if (sp.q) where.name = { contains: sp.q };
@@ -88,7 +93,7 @@ export default async function AdminPackagesPage({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <PackageRowActions id={p.id} slug={p.slug} published={p.published} featured={p.featured} />
+                      <PackageRowActions id={p.id} name={p.name} slug={p.slug} published={p.published} featured={p.featured} />
                     </td>
                   </tr>
                 ))}

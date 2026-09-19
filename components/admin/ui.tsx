@@ -77,3 +77,134 @@ export function AdminButtonLink({ href, children, tone = "primary" }: { href: st
     </Link>
   );
 }
+
+/** Panel wrapper for a row of list filters above a table. */
+export function FilterBar({ children }: { children: React.ReactNode }) {
+  return (
+    <form
+      method="get"
+      className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+    >
+      {children}
+    </form>
+  );
+}
+
+/** Horizontally scrollable table shell, so wide admin tables work on tablets. */
+export function TableWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <table className="w-full min-w-[720px] text-left text-sm">{children}</table>
+    </div>
+  );
+}
+
+/** Something went wrong, stated without leaking why. */
+export function ErrorState({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+      <h3 className="text-base font-semibold text-red-900">{title}</h3>
+      {description && <p className="mx-auto mt-2 max-w-md text-sm text-red-700">{description}</p>}
+    </div>
+  );
+}
+
+/** Placeholder rows shown by a route's loading.tsx while data is fetched. */
+export function TableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="h-10 animate-pulse rounded-lg bg-slate-100" />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Page links that preserve the current filters.
+ *
+ * `params` should be the page's own search params; `page` is replaced.
+ */
+export function Pagination({
+  page,
+  pageCount,
+  total,
+  basePath,
+  params,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  basePath: string;
+  params: Record<string, string | undefined>;
+}) {
+  if (pageCount <= 1) {
+    return (
+      <p className="mt-3 text-xs text-slate-500">
+        {total} {total === 1 ? "record" : "records"}
+      </p>
+    );
+  }
+
+  const href = (target: number) => {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value && key !== "page") search.set(key, value);
+    }
+    search.set("page", String(target));
+    return `${basePath}?${search.toString()}`;
+  };
+
+  // A short window around the current page keeps the control usable at any size.
+  const first = Math.max(1, Math.min(page - 2, pageCount - 4));
+  const numbers = Array.from({ length: Math.min(5, pageCount) }, (_, i) => first + i).filter(
+    (n) => n >= 1 && n <= pageCount,
+  );
+
+  return (
+    <nav className="mt-4 flex flex-wrap items-center justify-between gap-3" aria-label="Pagination">
+      <p className="text-xs text-slate-500">
+        Page {page} of {pageCount} · {total} {total === 1 ? "record" : "records"}
+      </p>
+      <div className="flex items-center gap-1">
+        <PageLink href={href(Math.max(1, page - 1))} disabled={page <= 1}>
+          Previous
+        </PageLink>
+        {numbers.map((n) => (
+          <PageLink key={n} href={href(n)} active={n === page}>
+            {n}
+          </PageLink>
+        ))}
+        <PageLink href={href(Math.min(pageCount, page + 1))} disabled={page >= pageCount}>
+          Next
+        </PageLink>
+      </div>
+    </nav>
+  );
+}
+
+function PageLink({
+  href,
+  children,
+  active,
+  disabled,
+}: {
+  href: string;
+  children: React.ReactNode;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  const classes = cn(
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-medium",
+    active
+      ? "border-brand-600 bg-brand-600 text-white"
+      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+    disabled && "pointer-events-none opacity-40",
+  );
+  if (disabled) return <span className={classes}>{children}</span>;
+  return (
+    <Link href={href} className={classes}>
+      {children}
+    </Link>
+  );
+}

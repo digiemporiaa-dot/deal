@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/admin/ui";
 import { PageForm } from "@/components/admin/PageForm";
+import { SeoPanelLoader } from "@/components/admin/SeoPanelLoader";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,8 @@ function parseSections(raw: string | null, fallbackContent: string): Section[] {
 }
 
 export default async function EditPagePage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePermission("pages:update");
+
   const { id } = await params;
   const page = await prisma.page.findUnique({
     where: { id },
@@ -49,6 +53,7 @@ export default async function EditPagePage({ params }: { params: Promise<{ id: s
     <div>
       <PageHeader title="Edit Page" description={page.title} />
       <PageForm initial={initial} pageId={page.id} />
+      <SeoPanelLoader entityType="PAGE" entityId={page.id} previewPath={`/${page.slug}`} />
     </div>
   );
 }

@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/seo";
 import Image from "next/image";
 import Link from "next/link";
 import { getBlogPosts } from "@/lib/services/catalog";
 import { SectionHeading } from "@/components/site/Section";
 import { formatDate } from "@/lib/utils";
+import { getPopularDestinations } from "@/lib/related";
+import { PopularDestinations } from "@/components/site/RelatedContent";
 
-export const metadata: Metadata = {
-  title: "Travel Blog",
-  description: "Travel tips, destination guides and inspiration for your next journey.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMetadata({
+    path: "/blog",
+    title: "Travel Blog",
+    description: "Travel tips, destination guides and inspiration for your next journey.",
+  });
+}
 
 export const dynamic = "force-dynamic";
 
 export default async function BlogPage() {
-  const posts = await getBlogPosts();
+  const [posts, popular] = await Promise.all([getBlogPosts(), getPopularDestinations(8)]);
   return (
     <div className="container-page py-14">
       <SectionHeading eyebrow="Read & explore" title="Travel Blog" subtitle="Guides, tips and inspiration from our travel experts." />
@@ -38,6 +44,9 @@ export default async function BlogPage() {
           ))}
         </div>
       )}
+
+      {/* Sends readers from guides into the bookable catalogue. */}
+      <PopularDestinations destinations={popular} title="Popular destinations" />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -27,6 +28,8 @@ import {
   getPackageCategories,
 } from "@/lib/services/catalog";
 import { getSettings } from "@/lib/settings";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { buildMetadata, getSeoMeta, organizationSchema, websiteSchema, extraSchema } from "@/lib/seo";
 import { PackageCard } from "@/components/site/PackageCard";
 import { DestinationCard } from "@/components/site/DestinationCard";
 import { Testimonials } from "@/components/site/Testimonials";
@@ -36,6 +39,21 @@ import { LinkButton } from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+  // "HOME" is the reserved ROUTE key for the homepage's SEO overrides.
+  const overrides = await getSeoMeta("ROUTE", "HOME");
+  return buildMetadata(
+    {
+      path: "/",
+      title: `${settings.siteName} — Travel Packages & Holidays`,
+      description: settings.tagline,
+      image: settings.logoUrl || null,
+    },
+    overrides,
+  );
+}
 
 /* Each category gets its own icon, matched by keywords in its name.
    Anything that doesn't match falls back to the plane icon. */
@@ -60,17 +78,25 @@ function categoryIcon(name: string) {
 }
 
 export default async function HomePage() {
-  const [packages, destinations, testimonials, posts, categories, settings] = await Promise.all([
-    getFeaturedPackages(6),
-    getFeaturedDestinations(6),
-    getTestimonials(6),
-    getBlogPosts(3),
-    getPackageCategories(),
-    getSettings(),
-  ]);
+  const [packages, destinations, testimonials, posts, categories, settings, organization, website, overrides] =
+    await Promise.all([
+      getFeaturedPackages(6),
+      getFeaturedDestinations(6),
+      getTestimonials(6),
+      getBlogPosts(3),
+      getPackageCategories(),
+      getSettings(),
+      // Organization and WebSite belong on the homepage only — repeating them
+      // on every page adds nothing and risks conflicting definitions.
+      organizationSchema(),
+      websiteSchema(),
+      getSeoMeta("ROUTE", "HOME"),
+    ]);
 
   return (
     <>
+      <JsonLd data={[organization, website, ...extraSchema(overrides?.schemaJson)]} />
+
       {/* Hero */}
       <section className="relative isolate overflow-hidden">
         <Image

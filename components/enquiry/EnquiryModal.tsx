@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, CheckCircle2, Loader2, MessageCircle } from "lucide-react";
 import { leadSchema, type LeadInput } from "@/lib/validation";
+import { readClientAttribution } from "@/lib/client-attribution";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, Label, FieldError } from "@/components/ui/Field";
 
@@ -76,7 +77,9 @@ export function EnquiryModal({ isOpen, onClose, title, defaultDestination, sourc
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        // The server prefers its own first-touch cookie; this is the fallback
+        // for browsers that blocked it.
+        body: JSON.stringify({ ...values, utm: readClientAttribution() }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

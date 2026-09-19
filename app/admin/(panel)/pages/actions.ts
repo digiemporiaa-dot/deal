@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { guardAction } from "@/lib/guard";
+import { publishBlocked } from "@/lib/permissions";
+import { recordActivity } from "@/lib/activity";
+import { createSlugRedirect } from "@/lib/redirects";
+import { toSafeError } from "@/lib/errors";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { slugify } from "@/lib/utils";
 
 export type ActionResult =
@@ -56,16 +61,17 @@ async function uniqueSlug(base: string, ignoreId?: string): Promise<string> {
 }
 
 export async function savePage(input: PageInput, id?: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user) return { ok: false, error: "Not authorized." };
+  const guard = await guardAction(id ? "pages:update" : "pages:create");
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const parsed = pageSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please fix the highlighted fields.", issues: parsed.error.flatten().fieldErrors };
   const d = parsed.data;
 
   // Keep only sections that actually have something in them.
+  // Rich-text bodies are sanitised before they are stored or rendered.
   const sections = d.sections
-    .map((s) => ({ heading: s.heading.trim(), level: s.level, body: s.body }))
+    .map((s) => ({ heading: s.heading.trim(), level: s.level, body: sanitizeHtml(s.body) }))
     .filter((s) => s.heading !== "" || !isEmptyHtml(s.body));
 
   if (sections.length === 0) {
@@ -80,6 +86,18 @@ export async function savePage(input: PageInput, id?: string): Promise<ActionRes
       return headingHtml + bodyHtml;
     })
     .join("\n");
+
+  const before = id
+    ? await prisma.page.findUnique({ where: { id }, select: { slug: true, status: true, title: true } })
+    : null;
+  if (id && !before) return { ok: false, error: "Page not found." };
+
+  const publishError = publishBlocked(
+    guard.actor.role,
+    "pages:create",
+    before ? before.status !== d.status : d.status === "PUBLISHED",
+  );
+  if (publishError) return { ok: false, error: publishError };
 
   const slug = await uniqueSlug(d.slug || d.title, id);
   const data = {
@@ -111,25 +129,51 @@ export async function savePage(input: PageInput, id?: string): Promise<ActionRes
         data: faqs.map((f, i) => ({ ...f, pageId: id!, sortOrder: i, published: true })),
       });
     }
+    if (before && before.slug !== slug) {
+      await createSlugRedirect({
+        oldPath: `/${before.slug}`,
+        newPath: `/${slug}`,
+        note: `Page slug changed from ${before.slug}`,
+      });
+    }
+
+    await recordActivity({
+      actor: guard.actor,
+      action: before ? "UPDATE" : "CREATE",
+      entity: "Page",
+      entityId: id,
+      description: `${before ? "Updated" : "Created"} page "${d.title}"`,
+      metadata: { slug, status: d.status },
+    });
+
     revalidatePath("/admin/pages");
     revalidatePath(`/${slug}`);
+    if (before && before.slug !== slug) revalidatePath(`/${before.slug}`);
     return { ok: true, id: id! };
   } catch (err) {
-    console.error("[savePage]", err);
-    return { ok: false, error: "Something went wrong while saving the page." };
+    return { ok: false, error: toSafeError(err, "action.savePage", { id }).message };
   }
 }
 
 export async function deletePage(id: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user) return { ok: false, error: "Not authorized." };
+  const guard = await guardAction("pages:delete");
+  if (!guard.ok) return { ok: false, error: guard.error };
   try {
     const page = await prisma.page.delete({ where: { id } });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "DELETE",
+      entity: "Page",
+      entityId: id,
+      description: `Deleted page "${page.title}"`,
+      metadata: { slug: page.slug },
+    });
+
     revalidatePath("/admin/pages");
     revalidatePath(`/${page.slug}`);
     return { ok: true, id };
   } catch (err) {
-    console.error("[deletePage]", err);
-    return { ok: false, error: "Something went wrong while deleting the page." };
+    return { ok: false, error: toSafeError(err, "action.deletePage", { id }).message };
   }
 }
