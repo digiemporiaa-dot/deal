@@ -61,6 +61,12 @@ export const ROLE_LABELS: Record<Role, string> = {
   VIEWER: "Viewer",
 };
 
+/** A role's label, falling back to a readable form of an unknown value. */
+export function roleLabel(role: string | undefined | null): string {
+  if (!role) return "No role";
+  return ROLE_LABELS[role as Role] ?? role.replace(/_/g, " ").toLowerCase();
+}
+
 export type Permission =
   // Overview
   | "dashboard:view"

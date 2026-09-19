@@ -2,104 +2,440 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
-  LayoutDashboard, Package, MapPin, CalendarCheck, Users, MessageSquare,
-  Star, FileText, Files, Tag, Image as ImageIcon, Settings, UserCog, Menu, X, Plane, LogOut, ClipboardList,
-  FileSpreadsheet, ReceiptIndianRupee, BarChart3, Shuffle, Download, Activity,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  LifeBuoy,
+  LogOut,
+  Plane,
+  Settings,
+  UserRound,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { canAccessSection } from "@/lib/permissions";
+import { navigationFor, isNavItemActive, type NavGroup } from "@/lib/admin-nav";
+import { roleLabel } from "@/lib/permissions";
 
-const NAV = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/packages", label: "Packages", icon: Package },
-  { href: "/admin/destinations", label: "Destinations", icon: MapPin },
-  { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
-  { href: "/admin/customers", label: "Customers", icon: Users },
-  { href: "/admin/leads", label: "Leads", icon: ClipboardList },
-  { href: "/admin/redirects", label: "Redirects", icon: Shuffle },
-  { href: "/admin/reports", label: "Reports", icon: BarChart3 },
-  { href: "/admin/activity-log", label: "Activity Log", icon: Activity },
-  { href: "/admin/quotations", label: "Quotations", icon: FileSpreadsheet },
-  { href: "/admin/invoices", label: "Invoices", icon: ReceiptIndianRupee },
-  { href: "/admin/testimonials", label: "Testimonials", icon: Star },
-  { href: "/admin/blogs", label: "Blogs", icon: FileText },
-  { href: "/admin/pages", label: "Pages", icon: Files },
-  { href: "/admin/coupons", label: "Coupons", icon: Tag },
-  { href: "/admin/media", label: "Media", icon: ImageIcon },
-  { href: "/admin/export", label: "Export & Backup", icon: Download },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
-  { href: "/admin/users", label: "Users", icon: UserCog },
-];
+/**
+ * Dark navy sidebar.
+ *
+ * Two independent bits of state, deliberately separate:
+ *  - `collapsed` — a desktop preference, remembered across visits.
+ *  - `mobileOpen` — a transient overlay on small screens, never remembered.
+ *
+ * Collapsing is stored in localStorage rather than a cookie because it is a
+ * per-device preference and nothing on the server needs to know it. The
+ * initial render is the expanded layout; the stored value is applied on mount,
+ * so the markup the server sends and the markup React first renders agree.
+ */
 
-export function Sidebar({ userName, userRole }: { userName: string; userRole: string }) {
+const STORAGE_KEY = "vd-admin-sidebar-collapsed";
+const GROUP_KEY = "vd-admin-sidebar-groups";
+
+export function Sidebar({
+  userName,
+  userEmail,
+  userRole,
+  mobileOpen,
+  onMobileClose,
+  onCollapsedChange,
+}: {
+  userName: string;
+  userEmail: string;
+  userRole: string;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  onCollapsedChange: (collapsed: boolean) => void;
+}) {
   const pathname = usePathname();
-  const [open, setOpen] = React.useState(false);
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
 
-  // Only show the sections this user's role may open.
-  const nav = NAV.filter((item) => canAccessSection(userRole, item.href.replace("/admin/", "")));
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [closedGroups, setClosedGroups] = React.useState<string[]>([]);
+
+  const groups = React.useMemo(() => navigationFor(userRole), [userRole]);
+
+  React.useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(STORAGE_KEY) === "1");
+      const stored = window.localStorage.getItem(GROUP_KEY);
+      if (stored) setClosedGroups(JSON.parse(stored) as string[]);
+    } catch {
+      // Private mode or blocked storage — the defaults are fine.
+    }
+  }, []);
+
+  React.useEffect(() => onCollapsedChange(collapsed), [collapsed, onCollapsedChange]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        /* not worth failing the click over */
+      }
+      return next;
+    });
+  };
+
+  const toggleGroup = (id: string) => {
+    setClosedGroups((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      try {
+        window.localStorage.setItem(GROUP_KEY, JSON.stringify(next));
+      } catch {
+        /* as above */
+      }
+      return next;
+    });
+  };
 
   return (
     <>
-      {/* Mobile top bar */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
-        <span className="flex items-center gap-2 font-bold text-slate-900">
-          <Plane className="h-5 w-5 text-brand-600" /> Admin
-        </span>
-        <button onClick={() => setOpen((v) => !v)} aria-label="Menu" className="rounded-md p-2 hover:bg-slate-100">
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-      </div>
+      {/* Backdrop, mobile only. */}
+      {mobileOpen && (
+        <div
+          className="admin-animate-overlay fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
+          onClick={onMobileClose}
+          aria-hidden
+        />
+      )}
 
       <aside
+        aria-label="Admin navigation"
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform lg:static lg:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-full",
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-admin-navy text-slate-300 transition-[width,transform] duration-200 lg:translate-x-0",
+          collapsed ? "w-[72px]" : "w-[264px]",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-6">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
-            <Plane className="h-5 w-5" />
-          </span>
-          <span className="font-display text-lg font-bold text-slate-900">Vacationdeal</span>
+        {/* Brand */}
+        <div
+          className={cn(
+            "flex h-[60px] shrink-0 items-center gap-2.5 border-b border-admin-navy-line",
+            collapsed ? "justify-center px-3" : "px-4",
+          )}
+        >
+          <Link
+            href="/admin/dashboard"
+            className="admin-focus flex min-w-0 items-center gap-2.5 rounded-control"
+            onClick={onMobileClose}
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-brand-600 text-white">
+              <Plane className="h-4 w-4" />
+            </span>
+            {!collapsed && (
+              <span className="min-w-0">
+                <span className="block truncate font-display text-[15px] font-bold leading-tight text-white">
+                  Vacationdeal
+                </span>
+                <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                  Travel CRM
+                </span>
+              </span>
+            )}
+          </Link>
+
+          <button
+            type="button"
+            onClick={onMobileClose}
+            aria-label="Close navigation"
+            className="admin-focus ml-auto rounded-control p-1.5 text-slate-400 hover:bg-admin-navy-soft hover:text-white lg:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {nav.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                )}
-              >
-                <item.icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
-                {item.label}
-              </Link>
-            );
-          })}
+        {/* Navigation */}
+        <nav className="admin-scroll min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+          {groups.map((group) => (
+            <NavGroupBlock
+              key={group.id}
+              group={group}
+              collapsed={collapsed}
+              open={!closedGroups.includes(group.id)}
+              pathname={pathname}
+              search={search}
+              onToggle={() => toggleGroup(group.id)}
+              onNavigate={onMobileClose}
+            />
+          ))}
         </nav>
 
-        <div className="border-t border-slate-200 p-4">
-          <div className="mb-3">
-            <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
-            <p className="text-xs text-slate-500">{userRole.replace(/_/g, " ")}</p>
-          </div>
-          <a
-            href="/api/auth/signout"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        {/* Footer */}
+        <div className="shrink-0 border-t border-admin-navy-line p-2.5">
+          <SidebarLink
+            href="/admin/settings"
+            icon={<LifeBuoy className="h-[18px] w-[18px]" />}
+            label="Help & support"
+            collapsed={collapsed}
+            onNavigate={onMobileClose}
+          />
+          <UserBlock
+            name={userName}
+            email={userEmail}
+            role={userRole}
+            collapsed={collapsed}
+            onNavigate={onMobileClose}
+          />
+
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "admin-focus mt-1 hidden w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] font-medium text-slate-400 hover:bg-admin-navy-soft hover:text-white lg:flex",
+              collapsed && "justify-center px-0",
+            )}
           >
-            <LogOut className="h-4 w-4" /> Sign out
-          </a>
+            {collapsed ? (
+              <ChevronsRight className="h-[18px] w-[18px]" />
+            ) : (
+              <>
+                <ChevronsLeft className="h-[18px] w-[18px]" />
+                Collapse
+              </>
+            )}
+          </button>
         </div>
       </aside>
-
-      {open && <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" onClick={() => setOpen(false)} />}
     </>
+  );
+}
+
+function NavGroupBlock({
+  group,
+  collapsed,
+  open,
+  pathname,
+  search,
+  onToggle,
+  onNavigate,
+}: {
+  group: NavGroup;
+  collapsed: boolean;
+  open: boolean;
+  pathname: string;
+  search: string;
+  onToggle: () => void;
+  onNavigate: () => void;
+}) {
+  // A collapsed rail has no room for headings, and hiding a group there would
+  // strand its items with no way to reach them.
+  const expanded = collapsed ? true : open;
+
+  return (
+    <div className="mb-1">
+      {group.label && !collapsed && (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="admin-focus flex w-full items-center justify-between rounded-control px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300"
+        >
+          {group.label}
+          <ChevronDown
+            className={cn("h-3 w-3 transition-transform", !open && "-rotate-90")}
+            aria-hidden
+          />
+        </button>
+      )}
+
+      {group.label && collapsed && <hr className="mx-2 my-2 border-admin-navy-line" />}
+
+      {expanded && (
+        <ul className="space-y-0.5">
+          {group.items.map((item) => (
+            <li key={item.href}>
+              <SidebarLink
+                href={item.href}
+                icon={<item.icon className="h-[18px] w-[18px]" />}
+                label={item.label}
+                active={isNavItemActive(item, pathname, search)}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SidebarLink({
+  href,
+  icon,
+  label,
+  active,
+  collapsed,
+  onNavigate,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  collapsed: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      // The label becomes the tooltip once the rail is collapsed, so the icons
+      // are still identifiable.
+      title={collapsed ? label : undefined}
+      className={cn(
+        "admin-focus flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] font-medium transition-colors",
+        collapsed && "justify-center px-0",
+        active
+          ? "bg-brand-600 text-white shadow-sm"
+          : "text-slate-400 hover:bg-admin-navy-soft hover:text-white",
+      )}
+    >
+      <span className="shrink-0">{icon}</span>
+      {!collapsed && <span className="truncate">{label}</span>}
+      {collapsed && <span className="sr-only">{label}</span>}
+    </Link>
+  );
+}
+
+function UserBlock({
+  name,
+  email,
+  role,
+  collapsed,
+  onNavigate,
+}: {
+  name: string;
+  email: string;
+  role: string;
+  collapsed: boolean;
+  onNavigate: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div ref={ref} className="relative">
+      {open && (
+        <div
+          role="menu"
+          className="admin-animate-pop absolute bottom-full left-0 z-10 mb-1.5 w-full min-w-[200px] overflow-hidden rounded-card border border-admin-navy-line bg-admin-navy-soft py-1 shadow-xl"
+        >
+          <MenuRow
+            role="menuitem"
+            href="/admin/settings"
+            icon={<UserRound className="h-4 w-4" />}
+            onNavigate={() => {
+              setOpen(false);
+              onNavigate();
+            }}
+          >
+            Profile
+          </MenuRow>
+          <MenuRow
+            role="menuitem"
+            href="/admin/settings"
+            icon={<Settings className="h-4 w-4" />}
+            onNavigate={() => {
+              setOpen(false);
+              onNavigate();
+            }}
+          >
+            Account settings
+          </MenuRow>
+          <hr className="my-1 border-admin-navy-line" />
+          {/* A plain link, so signing out still works with JavaScript off. */}
+          <a
+            role="menuitem"
+            href="/api/auth/signout"
+            className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-red-300 hover:bg-admin-navy hover:text-red-200"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </a>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={collapsed ? name : undefined}
+        className={cn(
+          "admin-focus mt-1 flex w-full items-center gap-2.5 rounded-control p-2 text-left hover:bg-admin-navy-soft",
+          collapsed && "justify-center p-1.5",
+        )}
+      >
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600/90 text-[11px] font-semibold text-white">
+          {initials || "?"}
+        </span>
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-white">{name}</span>
+              <span className="block truncate text-[11px] text-slate-500">
+                {email || roleLabel(role)}
+              </span>
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+function MenuRow({
+  href,
+  icon,
+  children,
+  onNavigate,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  onNavigate: () => void;
+  role?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-slate-300 hover:bg-admin-navy hover:text-white"
+    >
+      {icon}
+      {children}
+    </Link>
   );
 }

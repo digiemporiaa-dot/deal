@@ -1,17 +1,16 @@
 import Link from "next/link";
 import {
+  AlertTriangle,
+  ArrowUpRight,
   CalendarCheck,
   ClipboardList,
   IndianRupee,
-  Wallet,
-  Plane,
   Percent,
-  TrendingUp,
-  AlertTriangle,
-  Receipt,
+  Plane,
+  Wallet,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requirePermission } from "@/lib/guard";
+import { requirePermission, currentUser } from "@/lib/guard";
 import {
   getDashboardMetrics,
   getTrend,
@@ -19,38 +18,61 @@ import {
   getTopPackages,
   getTopDestinations,
   getConversionFunnel,
+  getComparison,
+  getBookingStatusBreakdown,
 } from "@/lib/analytics";
+import { followUpQueue, recentLeads } from "@/lib/services/crm";
+import { listActivity } from "@/lib/activity";
 import { dashboardQuerySchema } from "@/lib/validation";
-import { leadSourceLabel } from "@/lib/crm";
+import { leadSourceLabel, leadStatusLabel } from "@/lib/crm";
+import { hasPermission } from "@/lib/permissions";
 import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
-import { PageHeader, StatCard, Card, TableWrap } from "@/components/admin/ui";
-import { Badge } from "@/components/ui/Badge";
-import { LineChart, BarList, Funnel } from "@/components/admin/Charts";
-import { Input, Label, Select } from "@/components/ui/Field";
+import {
+  PageHeader,
+  StatCard,
+  SectionCard,
+  ChartCard,
+  TableWrap,
+  Thead,
+  Tbody,
+  Th,
+  Td,
+  StatusBadge,
+  Avatar,
+  Sparkline,
+  EmptyState,
+  AdminButtonLink,
+  type Delta,
+} from "@/components/admin/ui";
+import { LineChart, BarList, Funnel, ShareBar, CHART_COLORS } from "@/components/admin/Charts";
+import { DashboardFilters } from "@/components/admin/DashboardFilters";
+import { FollowUpList } from "@/components/admin/FollowUpList";
+import { leadStatusTone, bookingStatusTone, paymentStatusTone, humanStatus } from "@/lib/admin-status";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const RANGES: { value: string; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "month", label: "This month" },
-  { value: "last_month", label: "Last month" },
-  { value: "90d", label: "Last 90 days" },
-  { value: "year", label: "This year" },
-  { value: "all", label: "All time" },
-  { value: "custom", label: "Custom range" },
-];
-
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * The dashboard.
+ *
+ * Every figure comes from the database through `lib/analytics` aggregations —
+ * counts and sums computed in Postgres, never a table loaded into the page
+ * and reduced in JavaScript. An empty database therefore shows zeroes and
+ * empty states, which is the honest answer, rather than plausible-looking
+ * sample numbers.
+ *
+ * Comparisons are against the equivalent window immediately before the
+ * selected one, and are omitted entirely where there is nothing to compare
+ * against (all-time, or a previous period with no activity).
+ */
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   await requirePermission("dashboard:view");
+  const actor = await currentUser();
 
   const raw = await searchParams;
   const parsed = dashboardQuerySchema.safeParse({
@@ -63,292 +85,495 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const metrics = await getDashboardMetrics(query);
   const { range, revenue } = metrics;
 
-  const [trend, sources, topPackages, topDestinations, funnel, recentBookings] = await Promise.all([
+  const canSeeLeads = hasPermission(actor?.role, "leads:view");
+  const canSeeBookings = hasPermission(actor?.role, "bookings:view");
+  const canSeeActivity = hasPermission(actor?.role, "activity:view");
+
+  const [
+    trend,
+    comparison,
+    sources,
+    topPackages,
+    topDestinations,
+    funnel,
+    bookingMix,
+    followUps,
+    latestLeads,
+    recentBookings,
+    activity,
+  ] = await Promise.all([
     getTrend(range),
+    getComparison(range),
     getSourceBreakdown(range),
     getTopPackages(range),
     getTopDestinations(range),
     getConversionFunnel(range),
-    prisma.booking.findMany({
-      take: 6,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        bookingNumber: true,
-        createdAt: true,
-        totalAmount: true,
-        currency: true,
-        status: true,
-        paymentStatus: true,
-        customer: { select: { name: true } },
-        package: { select: { name: true } },
-      },
-    }),
+    getBookingStatusBreakdown(range),
+    canSeeLeads ? followUpQueue(actor, 5) : Promise.resolve({ overdue: [], today: [], upcoming: [] }),
+    canSeeLeads ? recentLeads(actor, 6) : Promise.resolve([]),
+    canSeeBookings
+      ? prisma.booking.findMany({
+          take: 6,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            bookingNumber: true,
+            createdAt: true,
+            travelDate: true,
+            totalAmount: true,
+            currency: true,
+            status: true,
+            paymentStatus: true,
+            customer: { select: { name: true } },
+            package: { select: { name: true } },
+          },
+        })
+      : Promise.resolve([]),
+    canSeeActivity ? listActivity({ perPage: 8 }) : Promise.resolve({ rows: [] }),
   ]);
 
   const money = (amount: number) => formatCurrency(amount, revenue.currency);
 
+  /** A delta is only shown when the comparison is meaningful. */
+  const delta = (percent: number | null, invert?: boolean): Delta | null =>
+    comparison.comparable && percent !== null
+      ? { percent, label: comparison.label, invert }
+      : null;
+
+  const revenueSeries = trend.map((point) => point.revenue);
+  const leadSeries = trend.map((point) => point.leads);
+  const bookingSeries = trend.map((point) => point.bookings);
+
+  const hasAnyData = metrics.leads.total > 0 || metrics.bookings.total > 0;
+
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard"
         description={`Business performance — ${range.label.toLowerCase()}`}
+        meta={
+          comparison.comparable
+            ? `Compared with ${formatDate(comparison.previous.from)} – ${formatDate(comparison.previous.to)}`
+            : "No earlier period to compare against"
+        }
+        action={<DashboardFilters range={query.range} from={query.from} to={query.to} />}
       />
-
-      {/* Date filter. Every figure below uses the selected range, except
-          "Upcoming trips", which is an operations number. */}
-      <form method="get" className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div>
-          <Label htmlFor="range">Period</Label>
-          <Select id="range" name="range" defaultValue={query.range}>
-            {RANGES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="from">From</Label>
-          <Input id="from" name="from" type="date" defaultValue={query.from ?? ""} />
-        </div>
-        <div>
-          <Label htmlFor="to">To</Label>
-          <Input id="to" name="to" type="date" defaultValue={query.to ?? ""} />
-        </div>
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          Apply
-        </button>
-        <p className="ml-auto text-xs text-slate-400">
-          Dates apply to when a lead or booking was created.
-        </p>
-      </form>
 
       {metrics.leads.overdueFollowUps > 0 && (
         <Link
           href="/admin/leads?due=overdue"
-          className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 hover:bg-red-100"
+          className="flex items-center gap-2.5 rounded-card border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800 transition-colors hover:bg-red-100"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             <strong>{metrics.leads.overdueFollowUps}</strong> follow-up
             {metrics.leads.overdueFollowUps === 1 ? " is" : "s are"} overdue.
           </span>
+          <ArrowUpRight className="ml-auto h-4 w-4 shrink-0" />
         </Link>
       )}
 
-      {/* Money */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
-          label="Gross booking value"
+          label="Gross bookings"
           value={money(revenue.grossBookingValue)}
-          icon={<IndianRupee className="h-5 w-5" />}
+          icon={<IndianRupee className="h-4 w-4" />}
           tone="green"
+          delta={delta(comparison.revenue)}
+          sparkline={<Sparkline points={revenueSeries} color={CHART_COLORS.success} />}
         />
         <StatCard
-          label="Paid"
+          label="Payments received"
           value={money(revenue.paid)}
-          icon={<Receipt className="h-5 w-5" />}
+          icon={<Wallet className="h-4 w-4" />}
           tone="green"
+          delta={delta(comparison.paid)}
+          href={canSeeBookings ? "/admin/payments" : undefined}
         />
         <StatCard
           label="Pending payment"
           value={money(revenue.pending)}
-          icon={<Wallet className="h-5 w-5" />}
+          icon={<Wallet className="h-4 w-4" />}
           tone="amber"
+          hint={revenue.pending > 0 ? "Awaiting collection" : "Nothing outstanding"}
+          href={canSeeBookings ? "/admin/payments?status=PENDING" : undefined}
         />
         <StatCard
-          label="Average booking"
-          value={money(revenue.averageBookingValue)}
-          icon={<TrendingUp className="h-5 w-5" />}
+          label="Leads"
+          value={metrics.leads.total}
+          icon={<ClipboardList className="h-4 w-4" />}
+          tone="purple"
+          delta={delta(comparison.leads)}
+          sparkline={<Sparkline points={leadSeries} color={CHART_COLORS.secondary} />}
+          href={canSeeLeads ? "/admin/leads" : undefined}
         />
-      </div>
-
-      {/* Volume */}
-      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Total leads" value={metrics.leads.total} icon={<ClipboardList className="h-5 w-5" />} tone="purple" />
-        <StatCard label="New leads" value={metrics.leads.new} icon={<ClipboardList className="h-5 w-5" />} tone="purple" />
-        <StatCard label="Qualified" value={metrics.leads.qualified} icon={<ClipboardList className="h-5 w-5" />} />
-        <StatCard label="Bookings" value={metrics.bookings.total} icon={<CalendarCheck className="h-5 w-5" />} />
-        <StatCard label="Confirmed" value={metrics.bookings.confirmed} icon={<CalendarCheck className="h-5 w-5" />} tone="green" />
-        <StatCard label="Cancelled" value={metrics.bookings.cancelled} icon={<CalendarCheck className="h-5 w-5" />} tone="amber" />
-        <StatCard label="Upcoming trips" value={metrics.bookings.upcomingTrips} icon={<Plane className="h-5 w-5" />} />
+        <StatCard
+          label="Bookings"
+          value={metrics.bookings.total}
+          icon={<CalendarCheck className="h-4 w-4" />}
+          tone="brand"
+          delta={delta(comparison.bookings)}
+          sparkline={<Sparkline points={bookingSeries} color={CHART_COLORS.primary} />}
+          href={canSeeBookings ? "/admin/bookings" : undefined}
+        />
         <StatCard
           label="Lead → booking"
           value={`${metrics.conversion.rate}%`}
-          icon={<Percent className="h-5 w-5" />}
-          tone="purple"
+          icon={<Percent className="h-4 w-4" />}
+          tone="brand"
+          delta={delta(comparison.conversion)}
+          hint={`${metrics.conversion.bookings} of ${metrics.conversion.leads}`}
         />
       </div>
 
-      {revenue.refunded > 0 && (
-        <p className="mt-3 text-xs text-slate-500">
-          {money(revenue.refunded)} was refunded in this period and is excluded from the paid total.
-        </p>
+      {!hasAnyData && (
+        <EmptyState
+          icon={<Plane className="h-5 w-5" />}
+          title="No activity in this period"
+          description="Nothing was booked and no enquiries came in between these dates. Try a wider date range, or check back once the site starts receiving traffic."
+          compact
+        />
       )}
 
-      {/* Trends */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Revenue trend</h2>
+      {/* ── Trends ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <ChartCard
+          title="Revenue overview"
+          description={`Booked value per ${trend.length > 40 ? "month" : "day"}, ${range.label.toLowerCase()}`}
+          className="xl:col-span-2"
+          footer={
+            revenue.refunded > 0
+              ? `${money(revenue.refunded)} was refunded in this period and is excluded from payments received.`
+              : undefined
+          }
+        >
           <LineChart
             points={trend.map((point) => ({ label: point.label, value: point.revenue }))}
             valueFormatter={money}
+            height={230}
           />
-        </Card>
+        </ChartCard>
 
-        <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Leads and bookings</h2>
-          <LineChart
-            points={trend.map((point) => ({ label: point.label, value: point.leads }))}
-            color="#7c3aed"
+        <ChartCard title="Booking mix" description="Every booking created in this period">
+          <ShareBar
+            rows={bookingMix.map((row) => ({
+              label: humanStatus(row.status),
+              count: row.count,
+              percent: row.percent,
+              // Only the two states an operations lead scans for carry colour.
+              color:
+                row.status === "CONFIRMED" || row.status === "COMPLETED"
+                  ? CHART_COLORS.success
+                  : row.status === "CANCELLED"
+                    ? CHART_COLORS.danger
+                    : undefined,
+            }))}
+            emptyMessage="No bookings in this period"
           />
-          <p className="mt-2 text-xs text-slate-500">Leads created per day</p>
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <LineChart
-              points={trend.map((point) => ({ label: point.label, value: point.bookings }))}
-              color="#0d9488"
-              height={120}
-            />
-            <p className="mt-2 text-xs text-slate-500">Bookings created per day</p>
-          </div>
-        </Card>
+          <p className="mt-4 border-t border-admin pt-3 text-xs text-admin-text-muted">
+            {metrics.bookings.upcomingTrips} trip
+            {metrics.bookings.upcomingTrips === 1 ? "" : "s"} yet to depart — an operations figure, so
+            it ignores the date filter.
+          </p>
+        </ChartCard>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-1 font-semibold text-slate-900">Conversion funnel</h2>
-          <p className="mb-4 text-xs text-slate-500">
-            Percentages show how many carried through from the stage above.
-          </p>
-          <Funnel stages={funnel} />
-        </Card>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <ChartCard title="Enquiries per day" description="New leads created">
+          <LineChart
+            points={trend.map((point) => ({ label: point.label, value: point.leads }))}
+            color={CHART_COLORS.secondary}
+            height={170}
+            emptyMessage="No enquiries in this period"
+          />
+        </ChartCard>
 
-        <Card className="p-5">
-          <h2 className="mb-1 font-semibold text-slate-900">Lead sources</h2>
-          <p className="mb-4 text-xs text-slate-500">
-            Captured server-side from UTM parameters and ad click ids.
-          </p>
+        <ChartCard
+          title="Lead pipeline"
+          description="How far enquiries travelled before converting"
+        >
+          <Funnel stages={funnel} />
+        </ChartCard>
+
+        <ChartCard
+          title="Where leads came from"
+          description="Captured server-side from UTM parameters and ad click ids"
+        >
           <BarList
-            rows={sources.slice(0, 8).map((row) => ({
+            rows={sources.slice(0, 6).map((row) => ({
               label: leadSourceLabel(row.source),
               value: row.leads,
               secondary: row.bookings > 0 ? `${row.bookings} booked` : undefined,
             }))}
-            color="#7c3aed"
+            color={CHART_COLORS.secondary}
             emptyMessage="No leads in this period"
           />
-        </Card>
+        </ChartCard>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-1 font-semibold text-slate-900">Booking sources</h2>
-          <p className="mb-4 text-xs text-slate-500">Revenue by channel.</p>
-          <BarList
-            rows={sources
-              .filter((row) => row.revenue > 0)
-              .slice(0, 8)
-              .map((row) => ({
-                label: leadSourceLabel(row.source),
-                value: row.revenue,
-                secondary: `${row.bookings} booking${row.bookings === 1 ? "" : "s"}`,
-              }))}
-            valueFormatter={money}
-            emptyMessage="No bookings in this period"
-          />
-        </Card>
+      {/* ── Operations ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {canSeeLeads && (
+          <SectionCard
+            title="Follow-ups"
+            description="Overdue first, then today, then the week ahead"
+            action={
+              <Link href="/admin/leads?due=today" className="text-xs font-semibold text-brand-600 hover:underline">
+                Open in CRM
+              </Link>
+            }
+            bodyClassName="p-0"
+          >
+            <FollowUpList
+              overdue={followUps.overdue.map(serializeFollowUp)}
+              today={followUps.today.map(serializeFollowUp)}
+              upcoming={followUps.upcoming.map(serializeFollowUp)}
+            />
+          </SectionCard>
+        )}
 
-        <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Top packages</h2>
-          <BarList
-            rows={topPackages.map((row) => ({
-              label: row.name,
-              value: row.revenue,
-              secondary: `${row.bookings} booking${row.bookings === 1 ? "" : "s"}`,
-            }))}
-            valueFormatter={money}
-            emptyMessage="No bookings in this period"
-          />
-        </Card>
+        {canSeeLeads && (
+          <SectionCard
+            title="Latest enquiries"
+            action={
+              <Link href="/admin/leads" className="text-xs font-semibold text-brand-600 hover:underline">
+                View all
+              </Link>
+            }
+            bodyClassName="p-0"
+          >
+            {latestLeads.length === 0 ? (
+              <p className="p-8 text-center text-sm text-admin-text-subtle">
+                No enquiries yet. They will appear here as soon as someone submits the website form.
+              </p>
+            ) : (
+              <ul className="divide-y divide-admin-border">
+                {latestLeads.map((lead) => (
+                  <li key={lead.id}>
+                    <Link
+                      href={`/admin/leads?lead=${lead.id}`}
+                      className="flex items-center gap-3 px-5 py-2.5 hover:bg-admin-bg"
+                    >
+                      <Avatar name={lead.name} size="sm" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-admin-text">
+                          {lead.name}
+                        </span>
+                        <span className="block truncate text-[11px] text-admin-text-muted">
+                          {[lead.contact, lead.destination].filter(Boolean).join(" · ")}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <StatusBadge tone={leadStatusTone(lead.status)}>
+                          {leadStatusLabel(lead.status)}
+                        </StatusBadge>
+                        <span className="mt-1 block text-[10px] text-admin-text-subtle">
+                          {formatDate(lead.createdAt)}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        )}
+
+        {canSeeActivity && (
+          <SectionCard
+            title="Latest activity"
+            action={
+              <Link href="/admin/activity-log" className="text-xs font-semibold text-brand-600 hover:underline">
+                View log
+              </Link>
+            }
+            bodyClassName="p-0"
+          >
+            {activity.rows.length === 0 ? (
+              <p className="p-8 text-center text-sm text-admin-text-subtle">
+                Nothing has happened yet.
+              </p>
+            ) : (
+              <ul className="divide-y divide-admin-border">
+                {activity.rows.map((row) => (
+                  <li key={row.id} className="flex gap-3 px-5 py-2.5">
+                    <Avatar name={row.userName || "System"} size="xs" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] leading-snug text-admin-text">{row.description}</p>
+                      <p className="mt-0.5 text-[11px] text-admin-text-subtle">
+                        {row.userName || "System"} · {formatDate(row.createdAt)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        )}
       </div>
 
-      {/* Top destinations */}
-      <Card className="mt-6 p-0">
-        <div className="border-b border-slate-100 p-5">
-          <h2 className="font-semibold text-slate-900">Top destinations</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Bookings and revenue come from booking records. Enquiries are matched on the destination
-            name a visitor typed, so that column is approximate.
-          </p>
-        </div>
-        {topDestinations.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-400">No activity in this period.</p>
-        ) : (
-          <TableWrap>
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Destination</th>
-                <th className="px-4 py-3 font-medium">Enquiries</th>
-                <th className="px-4 py-3 font-medium">Bookings</th>
-                <th className="px-4 py-3 font-medium">Revenue</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {topDestinations.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-4 py-3 font-medium text-slate-900">{row.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.leads}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.bookings}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-900">{money(row.revenue)}</td>
+      {/* ── Catalogue performance ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <SectionCard
+          title="Top destinations"
+          description="Bookings and revenue come from booking records. Enquiries are matched on the destination name a visitor typed, so that column is approximate."
+          bodyClassName="p-0"
+        >
+          {topDestinations.length === 0 ? (
+            <p className="p-8 text-center text-sm text-admin-text-subtle">
+              No destination activity in this period.
+            </p>
+          ) : (
+            <TableWrap minWidth={480}>
+              <Thead>
+                <tr>
+                  <Th>Destination</Th>
+                  <Th align="right">Enquiries</Th>
+                  <Th align="right">Bookings</Th>
+                  <Th align="right">Revenue</Th>
                 </tr>
-              ))}
-            </tbody>
-          </TableWrap>
-        )}
-      </Card>
+              </Thead>
+              <Tbody>
+                {topDestinations.map((row) => (
+                  <tr key={row.id} className="hover:bg-admin-bg">
+                    <Td className="font-medium text-admin-text">{row.name}</Td>
+                    <Td align="right" className="tabular-nums">
+                      {row.leads}
+                    </Td>
+                    <Td align="right" className="tabular-nums">
+                      {row.bookings}
+                    </Td>
+                    <Td align="right" className="font-semibold tabular-nums text-admin-text">
+                      {money(row.revenue)}
+                    </Td>
+                  </tr>
+                ))}
+              </Tbody>
+            </TableWrap>
+          )}
+        </SectionCard>
 
-      {/* Recent bookings */}
-      <Card className="mt-6 p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">Latest bookings</h2>
-          <Link href="/admin/bookings" className="text-sm text-brand-600 hover:underline">
-            View all
-          </Link>
-        </div>
-        {recentBookings.length === 0 ? (
-          <p className="text-sm text-slate-500">No bookings yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {recentBookings.map((booking) => (
-              <li key={booking.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">
-                    {booking.customer.name}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">
-                    {booking.bookingNumber} · {booking.package.name}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {formatCurrency(toNumber(booking.totalAmount), booking.currency)}
-                  </p>
-                  <p className="mt-0.5 flex items-center justify-end gap-2">
-                    <Badge tone={booking.paymentStatus === "PAID" ? "green" : "amber"}>
-                      {booking.paymentStatus}
-                    </Badge>
-                    <span className="text-xs text-slate-400">{formatDate(booking.createdAt)}</span>
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+        <SectionCard
+          title="Top packages"
+          description="Ranked by revenue booked in this period"
+          action={
+            <Link href="/admin/packages" className="text-xs font-semibold text-brand-600 hover:underline">
+              All packages
+            </Link>
+          }
+          bodyClassName="p-0"
+        >
+          {topPackages.length === 0 ? (
+            <p className="p-8 text-center text-sm text-admin-text-subtle">
+              No package sold in this period.
+            </p>
+          ) : (
+            <TableWrap minWidth={480}>
+              <Thead>
+                <tr>
+                  <Th>Package</Th>
+                  <Th>Destination</Th>
+                  <Th align="right">Bookings</Th>
+                  <Th align="right">Revenue</Th>
+                </tr>
+              </Thead>
+              <Tbody>
+                {topPackages.map((row) => (
+                  <tr key={row.id} className="hover:bg-admin-bg">
+                    <Td className="font-medium text-admin-text">
+                      <Link href={`/admin/packages/${row.id}/edit`} className="hover:text-brand-700">
+                        {row.name}
+                      </Link>
+                    </Td>
+                    <Td>{row.destination}</Td>
+                    <Td align="right" className="tabular-nums">
+                      {row.bookings}
+                    </Td>
+                    <Td align="right" className="font-semibold tabular-nums text-admin-text">
+                      {money(row.revenue)}
+                    </Td>
+                  </tr>
+                ))}
+              </Tbody>
+            </TableWrap>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* ── Recent bookings ── */}
+      {canSeeBookings && (
+        <SectionCard
+          title="Recent bookings"
+          action={
+            <AdminButtonLink href="/admin/bookings" tone="outline" size="sm">
+              View all
+            </AdminButtonLink>
+          }
+          bodyClassName="p-0"
+        >
+          {recentBookings.length === 0 ? (
+            <p className="p-8 text-center text-sm text-admin-text-subtle">
+              No bookings yet. They will appear here as soon as the first one is paid for.
+            </p>
+          ) : (
+            <TableWrap minWidth={760}>
+              <Thead>
+                <tr>
+                  <Th>Booking</Th>
+                  <Th>Customer</Th>
+                  <Th>Package</Th>
+                  <Th>Travel date</Th>
+                  <Th align="right">Amount</Th>
+                  <Th>Payment</Th>
+                  <Th>Status</Th>
+                </tr>
+              </Thead>
+              <Tbody>
+                {recentBookings.map((booking) => (
+                  <tr key={booking.id} className="hover:bg-admin-bg">
+                    <Td className="font-medium text-admin-text">
+                      <Link href={`/admin/bookings?booking=${booking.id}`} className="hover:text-brand-700">
+                        {booking.bookingNumber}
+                      </Link>
+                    </Td>
+                    <Td>{booking.customer.name}</Td>
+                    <Td className="max-w-[220px] truncate">{booking.package.name}</Td>
+                    <Td>{formatDate(booking.travelDate)}</Td>
+                    <Td align="right" className="font-semibold tabular-nums text-admin-text">
+                      {formatCurrency(toNumber(booking.totalAmount), booking.currency)}
+                    </Td>
+                    <Td>
+                      <StatusBadge tone={paymentStatusTone(booking.paymentStatus)} dot>
+                        {humanStatus(booking.paymentStatus)}
+                      </StatusBadge>
+                    </Td>
+                    <Td>
+                      <StatusBadge tone={bookingStatusTone(booking.status)}>
+                        {humanStatus(booking.status)}
+                      </StatusBadge>
+                    </Td>
+                  </tr>
+                ))}
+              </Tbody>
+            </TableWrap>
+          )}
+        </SectionCard>
+      )}
     </div>
   );
+}
+
+/** Dates cross to the client component as ISO strings. */
+function serializeFollowUp(row: {
+  id: string;
+  name: string;
+  phone: string;
+  destination: string | null;
+  status: string;
+  priority: string;
+  nextFollowUpAt: Date;
+  assignedToName: string | null;
+}) {
+  return { ...row, nextFollowUpAt: row.nextFollowUpAt.toISOString() };
 }

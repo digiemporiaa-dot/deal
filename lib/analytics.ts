@@ -488,3 +488,160 @@ export async function getConversionFunnel(range: DateRange): Promise<FunnelStage
     { stage: "Bookings", count: bookings },
   ];
 }
+
+/* ───────────────────── period comparison ───────────────────── */
+
+export type PeriodComparison = {
+  /** The equivalent window immediately before the selected one. */
+  previous: DateRange;
+  /** Percentage change, or null when there is nothing to compare against. */
+  leads: number | null;
+  bookings: number | null;
+  revenue: number | null;
+  paid: number | null;
+  conversion: number | null;
+  /** Whether a comparison makes sense at all for this range. */
+  comparable: boolean;
+  /** "vs previous 30 days" — the phrase shown under each KPI. */
+  label: string;
+};
+
+/**
+ * Percentage change between two values.
+ *
+ * Returns null rather than 0 or Infinity when the previous period was empty:
+ * "up ∞%" from a single lead is noise, and showing "0%" would claim the
+ * business was flat when it actually started from nothing.
+ */
+function percentChange(current: number, previous: number): number | null {
+  if (previous === 0) return current === 0 ? 0 : null;
+  return ((current - previous) / previous) * 100;
+}
+
+/** The window of the same length immediately before `range`. */
+export function previousRange(range: DateRange): DateRange {
+  const span = range.to.getTime() - range.from.getTime();
+  const to = new Date(range.from.getTime() - 1);
+  const from = new Date(to.getTime() - span);
+  return { from, to, label: `Previous ${range.label.toLowerCase()}`, key: `${range.key}-previous` };
+}
+
+/**
+ * Compare the selected period against the one before it.
+ *
+ * "All time" has nothing before it, so it reports `comparable: false` and the
+ * dashboard shows the figures without a delta rather than inventing one.
+ */
+export async function getComparison(range: DateRange): Promise<PeriodComparison> {
+  const previous = previousRange(range);
+  const emptyLabel = `vs ${range.label.toLowerCase().replace(/^last /, "previous ").replace(/^this /, "previous ")}`;
+
+  if (range.key === "all") {
+    return {
+      previous,
+      leads: null,
+      bookings: null,
+      revenue: null,
+      paid: null,
+      conversion: null,
+      comparable: false,
+      label: "all time",
+    };
+  }
+
+  const window = { gte: previous.from, lte: previous.to };
+  const current = { gte: range.from, lte: range.to };
+
+  const [
+    previousLeads,
+    previousBookings,
+    previousRevenue,
+    previousPaid,
+    currentLeads,
+    currentBookings,
+    currentRevenue,
+    currentPaid,
+  ] = await Promise.all([
+    prisma.lead.count({ where: { createdAt: window } }),
+    prisma.booking.count({ where: { createdAt: window, status: { not: "CANCELLED" } } }),
+    prisma.booking.aggregate({
+      where: { createdAt: window, status: { not: "CANCELLED" } },
+      _sum: { totalAmount: true },
+    }),
+    prisma.booking.aggregate({
+      where: { createdAt: window, paymentStatus: { in: PAID_STATUSES } },
+      _sum: { totalAmount: true },
+    }),
+    prisma.lead.count({ where: { createdAt: current } }),
+    prisma.booking.count({ where: { createdAt: current, status: { not: "CANCELLED" } } }),
+    prisma.booking.aggregate({
+      where: { createdAt: current, status: { not: "CANCELLED" } },
+      _sum: { totalAmount: true },
+    }),
+    prisma.booking.aggregate({
+      where: { createdAt: current, paymentStatus: { in: PAID_STATUSES } },
+      _sum: { totalAmount: true },
+    }),
+  ]);
+
+  const rate = (bookings: number, leads: number) => (leads === 0 ? 0 : (bookings / leads) * 100);
+
+  return {
+    previous,
+    leads: percentChange(currentLeads, previousLeads),
+    bookings: percentChange(currentBookings, previousBookings),
+    revenue: percentChange(
+      toNumber(currentRevenue._sum.totalAmount),
+      toNumber(previousRevenue._sum.totalAmount),
+    ),
+    paid: percentChange(toNumber(currentPaid._sum.totalAmount), toNumber(previousPaid._sum.totalAmount)),
+    conversion: percentChange(
+      rate(currentBookings, currentLeads),
+      rate(previousBookings, previousLeads),
+    ),
+    comparable: true,
+    label: emptyLabel,
+  };
+}
+
+export type BookingStatusRow = { status: string; count: number; percent: number };
+
+/** Booking mix for the period, as counts and shares. */
+export async function getBookingStatusBreakdown(range: DateRange): Promise<BookingStatusRow[]> {
+  const rows = await prisma.booking.groupBy({
+    by: ["status"],
+    where: { createdAt: { gte: range.from, lte: range.to } },
+    _count: { _all: true },
+  });
+
+  const total = rows.reduce((sum, row) => sum + row._count._all, 0);
+
+  return rows
+    .map((row) => ({
+      status: row.status,
+      count: row._count._all,
+      percent: total === 0 ? 0 : (row._count._all / total) * 100,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export type LeadStageRow = { status: string; count: number; percent: number };
+
+/** Lead pipeline for the period, as counts and shares. */
+export async function getLeadStageBreakdown(range: DateRange): Promise<LeadStageRow[]> {
+  const rows = await prisma.lead.groupBy({
+    by: ["status"],
+    where: { createdAt: { gte: range.from, lte: range.to } },
+    _count: { _all: true },
+  });
+
+  const total = rows.reduce((sum, row) => sum + row._count._all, 0);
+
+  return rows
+    .map((row) => ({
+      status: row.status,
+      count: row._count._all,
+      percent: total === 0 ? 0 : (row._count._all / total) * 100,
+    }))
+    .sort((a, b) => b.count - a.count);
+}

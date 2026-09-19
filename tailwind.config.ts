@@ -9,6 +9,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* Admin tokens. Defined as CSS variables in globals.css and read
+           through <alpha-value> so `bg-admin-card/60` works, and so a dark
+           theme only has to redefine the variables. */
+        admin: {
+          navy: "rgb(var(--admin-navy) / <alpha-value>)",
+          "navy-soft": "rgb(var(--admin-navy-soft) / <alpha-value>)",
+          "navy-line": "rgb(var(--admin-navy-line) / <alpha-value>)",
+          bg: "rgb(var(--admin-bg) / <alpha-value>)",
+          card: "rgb(var(--admin-card) / <alpha-value>)",
+          muted: "rgb(var(--admin-muted-bg) / <alpha-value>)",
+          border: "rgb(var(--admin-border) / <alpha-value>)",
+          "border-strong": "rgb(var(--admin-border-strong) / <alpha-value>)",
+          text: "rgb(var(--admin-text) / <alpha-value>)",
+          "text-muted": "rgb(var(--admin-text-muted) / <alpha-value>)",
+          "text-subtle": "rgb(var(--admin-text-subtle) / <alpha-value>)",
+          success: "rgb(var(--admin-success) / <alpha-value>)",
+          warning: "rgb(var(--admin-warning) / <alpha-value>)",
+          danger: "rgb(var(--admin-danger) / <alpha-value>)",
+          info: "rgb(var(--admin-info) / <alpha-value>)",
+        },
         brand: {
           50: "#eef7ff",
           100: "#d9edff",
@@ -43,6 +63,20 @@ const config: Config = {
         center: true,
         padding: { DEFAULT: "1rem", lg: "2rem" },
         screens: { "2xl": "1280px" },
+      },
+      borderColor: {
+        /* `border-admin` reads the token; plain `border` still works. */
+        admin: "rgb(var(--admin-border) / <alpha-value>)",
+      },
+      borderRadius: {
+        card: "var(--admin-radius-lg)",
+        control: "var(--admin-radius)",
+        chip: "var(--admin-radius-sm)",
+      },
+      spacing: {
+        sidebar: "var(--admin-sidebar-w)",
+        "sidebar-collapsed": "var(--admin-sidebar-collapsed-w)",
+        topbar: "var(--admin-topbar-h)",
       },
       keyframes: {
         "fade-in": {

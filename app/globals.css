@@ -5,6 +5,46 @@
 :root {
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: Georgia, "Times New Roman", serif;
+
+  /* ── Admin design tokens ──────────────────────────────────────────
+     Every admin surface reads these rather than a literal colour, so the
+     palette is changed in one place — and so a dark theme can be added later
+     by redefining them under a selector instead of touching components.
+     Values are raw "r g b" channels so Tailwind can apply opacity to them. */
+
+  /* Chrome */
+  --admin-navy: 15 23 42;         /* sidebar background          #0F172A */
+  --admin-navy-soft: 23 37 84;    /* raised sidebar surface      #172554 */
+  --admin-navy-line: 30 41 59;    /* divider inside the sidebar  #1E293B */
+
+  /* Page surfaces */
+  --admin-bg: 248 250 252;        /* page background             #F8FAFC */
+  --admin-card: 255 255 255;      /* card background             #FFFFFF */
+  --admin-muted-bg: 241 245 249;  /* table headers, chips        #F1F5F9 */
+  --admin-border: 226 232 240;    /* hairline border             #E2E8F0 */
+  --admin-border-strong: 203 213 225;
+
+  /* Text */
+  --admin-text: 15 23 42;         /* primary text                #0F172A */
+  --admin-text-muted: 100 116 139;/* secondary text              #64748B */
+  --admin-text-subtle: 148 163 184;
+
+  /* Status — used by badges, KPI deltas and chart series alike, so a
+     "success" reads the same everywhere it appears. */
+  --admin-success: 22 163 74;     /* #16A34A */
+  --admin-warning: 245 158 11;    /* #F59E0B */
+  --admin-danger: 220 38 38;      /* #DC2626 */
+  --admin-info: 37 99 235;        /* #2563EB */
+
+  /* Radii — one step up from the marketing site, which uses 2xl pills. */
+  --admin-radius-sm: 8px;
+  --admin-radius: 12px;
+  --admin-radius-lg: 14px;
+
+  /* Shell geometry, shared by the sidebar, the topbar and their spacers. */
+  --admin-sidebar-w: 264px;
+  --admin-sidebar-collapsed-w: 72px;
+  --admin-topbar-h: 60px;
 }
 
 @layer base {
@@ -24,6 +64,20 @@
 }
 
 @layer components {
+  /* One card definition, so every admin panel has the same border, radius
+     and shadow weight. Overriding these per page is what makes a dashboard
+     look assembled from parts. */
+  .admin-card {
+    @apply rounded-card border border-admin bg-admin-card;
+  }
+  .admin-card-shadow {
+    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  }
+  /* Focus ring used across admin controls — visible on a light card and on
+     the dark sidebar alike. */
+  .admin-focus {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:ring-offset-1;
+  }
   .container-page {
     @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
   }
@@ -35,5 +89,52 @@
   }
   .prose-content h2 {
     @apply text-xl font-semibold mt-6 mb-3 text-slate-900;
+  }
+}
+
+/* ── Admin chrome ─────────────────────────────────────────────────── */
+
+/* Sidebar and drawer scrollbars: a full-width bar next to a 264px nav looks
+   like a second border. */
+.admin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.4) transparent;
+}
+.admin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.admin-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184 / 0.4);
+  border-radius: 999px;
+}
+.admin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes admin-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes admin-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes admin-pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.admin-animate-drawer { animation: admin-slide-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.admin-animate-overlay { animation: admin-fade-in 0.18s ease-out; }
+.admin-animate-pop { animation: admin-pop-in 0.14s ease-out; }
+
+/* Animation is decoration here; anyone who has asked their system to stop
+   moving things should not have to watch a drawer fly in. */
+@media (prefers-reduced-motion: reduce) {
+  .admin-animate-drawer,
+  .admin-animate-overlay,
+  .admin-animate-pop {
+    animation: none;
   }
 }
