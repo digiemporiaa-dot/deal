@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { guardAction, type AdminActor } from "@/lib/guard";
 import { recordActivity } from "@/lib/activity";
@@ -75,6 +76,103 @@ async function stopSequence(leadId: string) {
     where: { id: leadId, sequenceStoppedAt: null },
     data: { sequenceStoppedAt: new Date() },
   });
+}
+
+/* ───────────────────────── create ───────────────────────── */
+
+const createLeadSchema = z.object({
+  name: z.string().trim().min(2, "Enter the customer's name").max(120),
+  phone: z.string().trim().min(6, "Enter a contact number").max(30),
+  email: z.union([z.string().trim().email("Enter a valid email"), z.literal("")]).optional(),
+  destination: z.string().trim().max(120).optional(),
+  travelDate: z.string().trim().max(20).optional(),
+  travellers: z.coerce.number().int().min(1).max(99).optional(),
+  budget: z.string().trim().max(60).optional(),
+  message: z.string().trim().max(2000).optional(),
+  priority: z.enum(LEAD_PRIORITIES).default("NORMAL"),
+  assignedToId: z.string().trim().max(40).optional(),
+});
+
+/**
+ * Create a lead by hand.
+ *
+ * Enquiries normally arrive from the website form, but a travel desk also
+ * takes them by phone and at counters — without this, those get typed into a
+ * notebook and never reach the pipeline. The source is recorded as "manual"
+ * so they never inflate the marketing attribution reports.
+ *
+ * A sales executive who may only work their own leads gets the new lead
+ * assigned to themselves, whatever the form said.
+ */
+export async function createLead(input: z.infer<typeof createLeadSchema>) {
+  const guard = await guardAction("leads:create");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const parsed = createLeadSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0]?.message || "Check the form." };
+  }
+
+  const data = parsed.data;
+
+  try {
+    const ownerOnly = isLeadOwnerOnly(guard.actor.role);
+    const assignedToId = ownerOnly
+      ? guard.actor.id
+      : data.assignedToId && data.assignedToId !== ""
+        ? data.assignedToId
+        : null;
+
+    // Only assign to a real, active user — a stale id from the form would
+    // otherwise fail the foreign key at insert time.
+    const owner = assignedToId
+      ? await prisma.user.findFirst({
+          where: { id: assignedToId, isActive: true },
+          select: { id: true },
+        })
+      : null;
+
+    const travelDate = data.travelDate ? new Date(data.travelDate) : null;
+
+    const lead = await prisma.lead.create({
+      data: {
+        name: data.name,
+        phone: data.phone,
+        email: data.email || null,
+        destination: data.destination || null,
+        travelDate: travelDate && !Number.isNaN(travelDate.getTime()) ? travelDate : null,
+        travellers: data.travellers ?? null,
+        budget: data.budget || null,
+        message: data.message || null,
+        priority: data.priority,
+        status: "NEW",
+        source: "manual",
+        assignedToId: owner?.id ?? null,
+        lastActivityAt: new Date(),
+      },
+      select: { id: true, name: true },
+    });
+
+    await logActivity({
+      leadId: lead.id,
+      type: "NOTE",
+      authorId: guard.actor.id,
+      body: `Lead added manually by ${guard.actor.name || "an admin"}`,
+    });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "CREATE",
+      entity: "Lead",
+      entityId: lead.id,
+      description: `Added lead "${lead.name}"`,
+    });
+
+    revalidatePath("/admin/leads");
+    return { ok: true as const, id: lead.id };
+  } catch (err) {
+    return { ok: false as const, error: toSafeError(err, "action.createLead").message };
+  }
 }
 
 export async function updateLeadStatus(id: string, status: string) {

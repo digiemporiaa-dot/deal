@@ -618,17 +618,21 @@ export function EmptyState({
   action,
   icon,
   compact,
+  bordered = true,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
   icon?: React.ReactNode;
   compact?: boolean;
+  /** Drop the frame when this sits inside a card that already has one. */
+  bordered?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-card border border-dashed border-admin-border-strong bg-admin-card text-center",
+        "flex flex-col items-center justify-center bg-admin-card text-center",
+        bordered && "rounded-card border border-dashed border-admin-border-strong",
         compact ? "p-8" : "p-12",
       )}
     >

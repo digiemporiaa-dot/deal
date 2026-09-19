@@ -1,13 +1,24 @@
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requirePermission, currentUser } from "@/lib/guard";
+import { requirePermission, currentUser, can } from "@/lib/guard";
 import { canAssignLeads, isLeadOwnerOnly } from "@/lib/permissions";
 import { listLeads, leadPipelineCounts, leadSourceOptions } from "@/lib/services/crm";
 import { leadQuerySchema } from "@/lib/validation";
 import { LEAD_STATUSES, LEAD_PRIORITIES, leadStatusLabel, leadSourceLabel } from "@/lib/crm";
-import { PageHeader, Card, EmptyState, FilterBar, Pagination } from "@/components/admin/ui";
-import { Input, Label, Select } from "@/components/ui/Field";
+import { leadStatusTone, humanStatus } from "@/lib/admin-status";
+import {
+  PageHeader,
+  Card,
+  FilterBar,
+  Pagination,
+  StatusBadge,
+  buttonClasses,
+} from "@/components/admin/ui";
+import { Input, Select, FilterLabel } from "@/components/ui/Field";
 import { LeadTable } from "@/components/admin/LeadTable";
+import { NewLeadButton } from "@/components/admin/NewLeadButton";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +28,14 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * The CRM list.
+ *
+ * Filtering, sorting and paging all happen in the database — the page never
+ * loads more than one page of leads, whatever the pipeline size. The pipeline
+ * strip doubles as the status filter, which is how most people actually
+ * navigate a CRM.
+ */
 export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
   await requirePermission("leads:view");
   const actor = await currentUser();
@@ -45,18 +64,21 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
   const ownLeadsOnly = isLeadOwnerOnly(actor?.role);
   const mayAssign = canAssignLeads(actor?.role);
 
-  const [{ rows, total, page, pageCount }, counts, sources, members] = await Promise.all([
-    listLeads(query, actor),
-    leadPipelineCounts(actor),
-    leadSourceOptions(actor),
-    mayAssign
-      ? prisma.user.findMany({
-          where: { isActive: true },
-          select: { id: true, name: true, role: true },
-          orderBy: { name: "asc" },
-        })
-      : Promise.resolve([] as { id: string; name: string; role: string }[]),
-  ]);
+  const [{ rows, total, page, pageCount }, counts, sources, members, mayCreate, mayExport] =
+    await Promise.all([
+      listLeads(query, actor),
+      leadPipelineCounts(actor),
+      leadSourceOptions(actor),
+      mayAssign
+        ? prisma.user.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true, role: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([] as { id: string; name: string; role: string }[]),
+      can("leads:create"),
+      can("export:data"),
+    ]);
 
   const params: Record<string, string | undefined> = {
     q: query.q,
@@ -73,82 +95,118 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
     perPage: String(query.perPage),
   };
 
+  const filtersApplied = Object.entries(params).some(
+    ([key, value]) => value && key !== "sort" && key !== "perPage",
+  );
+
   return (
     <div>
       <PageHeader
-        title={ownLeadsOnly ? "My Leads" : "Leads & CRM"}
+        title={ownLeadsOnly ? "My leads" : "Leads"}
         description={
           ownLeadsOnly
             ? "Enquiries assigned to you — follow up and close them."
             : "Every enquiry, from first touch to booking."
         }
+        action={
+          <>
+            {mayExport && (
+              <Link href="/admin/export" className={buttonClasses("outline")}>
+                <Download className="h-4 w-4" />
+                Export
+              </Link>
+            )}
+            {mayCreate && (
+              <NewLeadButton
+                members={members.map((member) => ({ id: member.id, name: member.name }))}
+                canAssign={mayAssign}
+              />
+            )}
+          </>
+        }
       />
 
-      {/* Pipeline */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-        {LEAD_STATUSES.map((status) => (
-          <Link
-            key={status}
-            href={`/admin/leads?status=${status}`}
-            className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
-          >
-            <p className="text-lg font-bold text-slate-900">{counts.statusCount(status)}</p>
-            <p className="text-xs font-medium text-slate-500">{leadStatusLabel(status)}</p>
-          </Link>
-        ))}
+      {/* Pipeline. Each tile is also the status filter. */}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+        {LEAD_STATUSES.map((status) => {
+          const active = query.status === status;
+          return (
+            <Link
+              key={status}
+              href={active ? "/admin/leads" : `/admin/leads?status=${status}`}
+              aria-pressed={active}
+              className={cn(
+                "admin-card admin-card-shadow px-3 py-2.5 transition-colors",
+                active ? "border-brand-500 ring-1 ring-brand-500" : "hover:border-brand-300",
+              )}
+            >
+              <p className="font-display text-lg font-bold leading-none text-admin-text">
+                {counts.statusCount(status)}
+              </p>
+              <p className="mt-1.5 flex items-center gap-1.5">
+                <StatusBadge tone={leadStatusTone(status)} dot className="px-0 ring-0">
+                  {leadStatusLabel(status)}
+                </StatusBadge>
+              </p>
+            </Link>
+          );
+        })}
         <Link
-          href="/admin/leads?due=overdue"
-          className={`rounded-xl border p-3 text-center transition-colors ${
-            counts.overdue > 0
-              ? "border-red-300 bg-red-50 hover:bg-red-100"
-              : "border-slate-200 bg-white hover:bg-slate-50"
-          }`}
+          href={query.due === "overdue" ? "/admin/leads" : "/admin/leads?due=overdue"}
+          className={cn(
+            "admin-card admin-card-shadow px-3 py-2.5 transition-colors",
+            counts.overdue > 0 ? "border-red-300 bg-red-50 hover:bg-red-100" : "hover:border-brand-300",
+            query.due === "overdue" && "ring-1 ring-red-400",
+          )}
         >
-          <p className={`text-lg font-bold ${counts.overdue > 0 ? "text-red-700" : "text-slate-900"}`}>
+          <p
+            className={cn(
+              "font-display text-lg font-bold leading-none",
+              counts.overdue > 0 ? "text-red-700" : "text-admin-text",
+            )}
+          >
             {counts.overdue}
           </p>
-          <p className={`text-xs font-medium ${counts.overdue > 0 ? "text-red-600" : "text-slate-500"}`}>
+          <p
+            className={cn(
+              "mt-1.5 text-[11px] font-medium",
+              counts.overdue > 0 ? "text-red-600" : "text-admin-text-muted",
+            )}
+          >
             Overdue
           </p>
         </Link>
       </div>
 
-      {/* Follow-up shortcuts */}
-      <div className="mb-4 flex flex-wrap gap-2 text-sm">
-        <Link
-          href="/admin/leads?due=today"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Today&rsquo;s follow-ups
-          <span className="rounded bg-slate-100 px-1.5 text-xs">{counts.dueToday}</span>
-        </Link>
-        <Link
-          href="/admin/leads?due=upcoming"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Upcoming
-          <span className="rounded bg-slate-100 px-1.5 text-xs">{counts.upcoming}</span>
-        </Link>
+      {/* Saved views. */}
+      <div className="mb-4 flex flex-wrap gap-1.5 text-[13px]">
+        <QuickFilter href="/admin/leads?due=today" label="Due today" count={counts.dueToday} />
+        <QuickFilter href="/admin/leads?due=upcoming" label="Upcoming" count={counts.upcoming} />
         {!ownLeadsOnly && (
-          <Link
-            href="/admin/leads?owner=none"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Unassigned
-            <span className="rounded bg-slate-100 px-1.5 text-xs">{counts.unassigned}</span>
-          </Link>
+          <>
+            <QuickFilter href="/admin/leads?owner=none" label="Unassigned" count={counts.unassigned} />
+            <QuickFilter href="/admin/leads?owner=me" label="Mine" />
+          </>
         )}
+        <QuickFilter href="/admin/leads?priority=URGENT" label="Urgent" />
       </div>
 
       <FilterBar>
-        <div className="min-w-[220px] flex-1">
-          <Label htmlFor="q">Search</Label>
-          <Input id="q" name="q" defaultValue={query.q ?? ""} placeholder="Name, phone, email or campaign" />
+        <div className="min-w-[200px] flex-1">
+          <FilterLabel htmlFor="q">Search</FilterLabel>
+          <Input
+            inputSize="sm"
+            id="q"
+            name="q"
+            defaultValue={query.q ?? ""}
+            placeholder="Name, phone, email or campaign"
+          />
         </div>
+
         <div>
-          <Label htmlFor="status">Status</Label>
-          <Select id="status" name="status" defaultValue={query.status ?? ""}>
-            <option value="">All statuses</option>
+          <FilterLabel htmlFor="status">Status</FilterLabel>
+          <Select inputSize="sm" id="status" name="status" defaultValue={query.status ?? ""}>
+            <option value="">All</option>
             {LEAD_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {leadStatusLabel(status)}
@@ -156,10 +214,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             ))}
           </Select>
         </div>
+
         <div>
-          <Label htmlFor="source">Source</Label>
-          <Select id="source" name="source" defaultValue={query.source ?? ""}>
-            <option value="">All sources</option>
+          <FilterLabel htmlFor="source">Source</FilterLabel>
+          <Select inputSize="sm" id="source" name="source" defaultValue={query.source ?? ""}>
+            <option value="">All</option>
             {sources.map((source) => (
               <option key={source} value={source}>
                 {leadSourceLabel(source)}
@@ -167,34 +226,35 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             ))}
           </Select>
         </div>
+
         <div>
-          <Label htmlFor="priority">Priority</Label>
-          <Select id="priority" name="priority" defaultValue={query.priority ?? ""}>
+          <FilterLabel htmlFor="priority">Priority</FilterLabel>
+          <Select inputSize="sm" id="priority" name="priority" defaultValue={query.priority ?? ""}>
             <option value="">Any</option>
             {LEAD_PRIORITIES.map((priority) => (
               <option key={priority} value={priority}>
-                {priority.charAt(0) + priority.slice(1).toLowerCase()}
+                {humanStatus(priority)}
               </option>
             ))}
           </Select>
         </div>
+
         <div>
-          <Label htmlFor="destination">Destination</Label>
+          <FilterLabel htmlFor="destination">Destination</FilterLabel>
           <Input
+            inputSize="sm"
             id="destination"
             name="destination"
             defaultValue={query.destination ?? ""}
-            placeholder="Bali"
+            placeholder="Kashmir"
+            className="w-[130px]"
           />
         </div>
-        <div>
-          <Label htmlFor="budget">Budget</Label>
-          <Input id="budget" name="budget" defaultValue={query.budget ?? ""} placeholder="50000" />
-        </div>
+
         {!ownLeadsOnly && (
           <div>
-            <Label htmlFor="owner">Assigned to</Label>
-            <Select id="owner" name="owner" defaultValue={query.owner ?? ""}>
+            <FilterLabel htmlFor="owner">Owner</FilterLabel>
+            <Select inputSize="sm" id="owner" name="owner" defaultValue={query.owner ?? ""}>
               <option value="">Anyone</option>
               <option value="me">Me</option>
               <option value="none">Unassigned</option>
@@ -206,83 +266,87 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             </Select>
           </div>
         )}
+
         <div>
-          <Label htmlFor="due">Follow-up</Label>
-          <Select id="due" name="due" defaultValue={query.due ?? ""}>
+          <FilterLabel htmlFor="due">Follow-up</FilterLabel>
+          <Select inputSize="sm" id="due" name="due" defaultValue={query.due ?? ""}>
             <option value="">All</option>
             <option value="overdue">Overdue</option>
             <option value="today">Due today</option>
             <option value="upcoming">Upcoming</option>
           </Select>
         </div>
+
         <div>
-          <Label htmlFor="from">Created from</Label>
-          <Input id="from" name="from" type="date" defaultValue={query.from ?? ""} />
+          <FilterLabel htmlFor="from">From</FilterLabel>
+          <Input
+            inputSize="sm"
+            id="from"
+            name="from"
+            type="date"
+            defaultValue={query.from ?? ""}
+            className="w-[140px]"
+          />
         </div>
+
         <div>
-          <Label htmlFor="to">to</Label>
-          <Input id="to" name="to" type="date" defaultValue={query.to ?? ""} />
+          <FilterLabel htmlFor="to">To</FilterLabel>
+          <Input
+            inputSize="sm"
+            id="to"
+            name="to"
+            type="date"
+            defaultValue={query.to ?? ""}
+            className="w-[140px]"
+          />
         </div>
+
         <div>
-          <Label htmlFor="sort">Sort</Label>
-          <Select id="sort" name="sort" defaultValue={query.sort}>
+          <FilterLabel htmlFor="sort">Sort</FilterLabel>
+          <Select inputSize="sm" id="sort" name="sort" defaultValue={query.sort}>
             <option value="followup">Follow-up date</option>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="activity">Recent activity</option>
           </Select>
         </div>
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          Filter
+
+        <button type="submit" className={buttonClasses("primary", "sm")}>
+          Apply
         </button>
-        <a
-          href="/admin/leads"
-          className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Reset
-        </a>
+        {filtersApplied && (
+          <a href="/admin/leads" className={buttonClasses("ghost", "sm")}>
+            Reset
+          </a>
+        )}
       </FilterBar>
 
-      {rows.length === 0 ? (
-        <EmptyState
-          title={ownLeadsOnly ? "No leads assigned to you yet" : "No leads match these filters"}
-          description={
-            ownLeadsOnly
-              ? "Your manager will assign enquiries to you — they will appear here."
-              : "Enquiries submitted from the website appear here. Try clearing the filters."
-          }
+      <Card className="overflow-hidden p-0">
+        <LeadTable
+          leads={rows.map((lead) => ({
+            id: lead.id,
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone,
+            whatsapp: lead.whatsapp,
+            destination: lead.destination,
+            budget: lead.budget,
+            source: lead.source,
+            campaign: lead.campaign,
+            status: lead.status,
+            priority: lead.priority,
+            createdAt: lead.createdAt.toISOString(),
+            nextFollowUpAt: lead.nextFollowUpAt?.toISOString() ?? null,
+            lastActivityAt: lead.lastActivityAt?.toISOString() ?? null,
+            assignedToId: lead.assignedToId,
+            assignedToName: lead.assignedTo?.name ?? null,
+            activityCount: lead._count.notes,
+          }))}
+          members={members}
+          showOwner={!ownLeadsOnly}
+          canAssign={mayAssign}
         />
-      ) : (
-        <Card className="overflow-hidden p-0">
-          <LeadTable
-            leads={rows.map((lead) => ({
-              id: lead.id,
-              name: lead.name,
-              email: lead.email,
-              phone: lead.phone,
-              whatsapp: lead.whatsapp,
-              destination: lead.destination,
-              budget: lead.budget,
-              source: lead.source,
-              campaign: lead.campaign,
-              status: lead.status,
-              priority: lead.priority,
-              createdAt: lead.createdAt.toISOString(),
-              nextFollowUpAt: lead.nextFollowUpAt?.toISOString() ?? null,
-              lastActivityAt: lead.lastActivityAt?.toISOString() ?? null,
-              assignedToId: lead.assignedToId,
-              assignedToName: lead.assignedTo?.name ?? null,
-              activityCount: lead._count.notes,
-            }))}
-            members={members}
-            showOwner={!ownLeadsOnly}
-            canAssign={mayAssign}
-          />
-        </Card>
-      )}
+      </Card>
 
       <Pagination
         page={page}
@@ -290,7 +354,22 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         total={total}
         basePath="/admin/leads"
         params={params}
+        unit="lead"
       />
     </div>
+  );
+}
+
+function QuickFilter({ href, label, count }: { href: string; label: string; count?: number }) {
+  return (
+    <Link
+      href={href}
+      className="admin-focus inline-flex items-center gap-1.5 rounded-control border border-admin bg-admin-card px-2.5 py-1.5 font-medium text-admin-text-muted transition-colors hover:border-brand-300 hover:text-brand-700"
+    >
+      {label}
+      {count !== undefined && (
+        <span className="rounded bg-admin-muted px-1.5 text-[11px] tabular-nums">{count}</span>
+      )}
+    </Link>
   );
 }
