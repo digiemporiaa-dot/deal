@@ -24,6 +24,7 @@ import {
   Plus,
   Redo2,
   Save,
+  Settings2,
   Smartphone,
   Tablet,
   Undo2,
@@ -42,6 +43,7 @@ import {
 } from "@/components/builder/editor/useBuilderState";
 import { CanvasNode, DropZone, type CanvasContext } from "@/components/builder/editor/CanvasNode";
 import { SettingsPanel } from "@/components/builder/editor/SettingsPanel";
+import { PageSettingsDialog } from "@/components/builder/editor/PageSettingsDialog";
 import {
   ElementLibrary,
   type LibrarySection,
@@ -72,6 +74,9 @@ export type BuilderPage = {
   title: string;
   slug: string;
   status: string;
+  seoTitle: string;
+  seoDescription: string;
+  ogImage: string;
   draft: PageDocument;
   hasPublished: boolean;
 };
@@ -96,6 +101,10 @@ export function PageBuilder({
   const [dragging, setDragging] = React.useState<{ label: string; type: string } | null>(null);
   const [publishing, setPublishing] = React.useState(false);
   const [addingTo, setAddingTo] = React.useState<{ parentId: string; index: number } | null>(null);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  // Held locally so the toolbar and the preview link update as soon as the
+  // details are saved, without reloading the whole builder.
+  const [details, setDetails] = React.useState({ title: page.title, slug: page.slug });
 
   const { document, selectedId, breakpoint, dirty, past, future } = state;
 
@@ -312,10 +321,18 @@ export function PageBuilder({
             <ArrowLeft className="h-4 w-4" /> Pages
           </a>
 
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{page.title}</p>
-            <p className="truncate text-[11px] text-slate-400">/{page.slug}</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            title="Page settings and SEO"
+            className="group flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-slate-100"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-slate-900">{details.title}</span>
+              <span className="block truncate text-[11px] text-slate-400">/{details.slug}</span>
+            </span>
+            <Settings2 className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-slate-600" />
+          </button>
 
           <div className="mx-2 flex items-center gap-0.5">
             <ToolbarButton
@@ -364,6 +381,15 @@ export function PageBuilder({
               <Recycle className="h-4 w-4" />
             </ToolbarButton>
 
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              title="Page settings and SEO"
+              className="inline-flex h-9 items-center rounded-lg px-2.5 text-slate-600 hover:bg-slate-100"
+            >
+              <Settings2 className="h-4 w-4" />
+            </button>
+
             <a
               href={`/admin/pages/${page.id}/revisions`}
               title="Revision history"
@@ -373,7 +399,7 @@ export function PageBuilder({
             </a>
 
             <a
-              href={`/${page.slug}?preview=1`}
+              href={`/${details.slug}?preview=1`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -484,6 +510,21 @@ export function PageBuilder({
           </div>
         )}
       </DragOverlay>
+
+      {settingsOpen && (
+        <PageSettingsDialog
+          page={{
+            id: page.id,
+            title: details.title,
+            slug: details.slug,
+            seoTitle: page.seoTitle,
+            seoDescription: page.seoDescription,
+            ogImage: page.ogImage,
+          }}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={setDetails}
+        />
+      )}
     </DndContext>
   );
 }

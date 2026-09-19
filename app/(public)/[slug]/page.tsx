@@ -50,14 +50,18 @@ export default async function CmsPage({ params, searchParams }: Params) {
   const { slug } = await params;
   const sp = await searchParams;
 
-  // A page that backs a code route (the homepage, contact) is served there.
-  // Leaving it reachable at both addresses would put two URLs with identical
-  // content into the index, competing for the same search result.
-  if (CMS_ROUTES[slug]) permanentRedirect(CMS_ROUTES[slug]);
-
   // Draft preview needs the permission, not merely a session: a signed-in
   // customer must not be able to read unpublished copy by guessing the URL.
   const allowDraft = sp.preview === "1" ? await can("pages:view") : false;
+
+  // A page that backs a code route (the homepage, contact) is served there.
+  // Leaving it reachable at both addresses would put two URLs with identical
+  // content into the index, competing for the same search result.
+  //
+  // Preview is the exception: /contact serves the PUBLISHED copy, so
+  // redirecting a previewing admin there would quietly show them the live
+  // page instead of the draft they came to check.
+  if (CMS_ROUTES[slug] && !allowDraft) permanentRedirect(CMS_ROUTES[slug]);
 
   const page = await getPage(slug, allowDraft);
 
@@ -86,16 +90,17 @@ export default async function CmsPage({ params, searchParams }: Params) {
     ...(isDraft ? [] : extraSchema(overrides?.schemaJson)),
   ];
 
-  // A page built with the page builder renders from its document. Previewing
-  // shows the draft; visitors always get the published copy, so editing never
-  // changes the live page until someone publishes it.
-  const builderContent = isDraft || sp.preview === "1" ? page.draftContent : page.publishedContent;
+  // A page built with the page builder renders from its document. Only a
+  // permitted preview shows the draft — `?preview=1` on its own must not
+  // reveal unpublished work on a page that is otherwise live.
+  const showingDraft = isDraft || allowDraft;
+  const builderContent = showingDraft ? page.draftContent : page.publishedContent;
 
   if (hasBuilderContent(builderContent)) {
     const settings = await getSettings();
     return (
       <>
-        {isDraft && <PreviewBanner title={page.title} editHref={`/admin/pages/${page.id}/builder`} />}
+        {showingDraft && <PreviewBanner title={page.title} editHref={`/admin/pages/${page.id}/builder`} />}
         {!isDraft && <JsonLd data={schema} />}
         <RenderDocument content={builderContent} ctx={{ whatsappNumber: settings.whatsapp }} />
       </>

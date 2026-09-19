@@ -455,11 +455,16 @@ export async function duplicatePage(pageId: string): Promise<Result<{ id: string
 }
 
 const detailsSchema = z.object({
-  title: z.string().trim().min(2).max(200),
-  slug: z.string().trim().min(1).max(200).refine(freeSlug, reservedMessage),
+  title: z.string().trim().min(2, "Give the page a title").max(200),
+  slug: z.string().trim().min(1, "Give the page an address").max(200).refine(freeSlug, reservedMessage),
+  // Empty means "fall back to the page title / the site description", which
+  // is why these are stored as null rather than as an empty string.
+  seoTitle: z.string().trim().max(200).optional(),
+  seoDescription: z.string().trim().max(400).optional(),
+  ogImage: z.string().trim().max(1000).optional(),
 });
 
-/** Rename a page, keeping its old URL working. */
+/** Rename a page and set its SEO, keeping its old URL working. */
 export async function updatePageDetails(
   pageId: string,
   input: z.infer<typeof detailsSchema>,
@@ -477,7 +482,14 @@ export async function updatePageDetails(
 
     await prisma.page.update({
       where: { id: pageId },
-      data: { title: parsed.data.title, slug, updatedById: loaded.actor.id },
+      data: {
+        title: parsed.data.title,
+        slug,
+        seoTitle: parsed.data.seoTitle || null,
+        seoDescription: parsed.data.seoDescription || null,
+        ogImage: parsed.data.ogImage || null,
+        updatedById: loaded.actor.id,
+      },
     });
 
     // An indexed URL must keep working after a rename.
@@ -494,7 +506,7 @@ export async function updatePageDetails(
       action: "UPDATE",
       entity: "Page",
       entityId: pageId,
-      description: `Renamed page to "${parsed.data.title}"`,
+      description: `Updated page details for "${parsed.data.title}"`,
       metadata: slug !== loaded.page.slug ? { slug: { from: loaded.page.slug, to: slug } } : undefined,
     });
 
