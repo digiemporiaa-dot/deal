@@ -19,6 +19,7 @@ import {
   CloudOff,
   Eye,
   History,
+  LayoutTemplate,
   Loader2,
   Monitor,
   Plus,
@@ -272,6 +273,19 @@ export function PageBuilder({
     }
   };
 
+  /** Save the whole page as a starting point for new pages. */
+  const saveAsPageTemplate = async () => {
+    const name = window.prompt("Name for this page template");
+    if (!name) return;
+    const result = await saveTemplate({ name, kind: "page", category: "Pages" }, document);
+    if (result.ok) {
+      toast.success("Saved. It is now offered when creating a page.");
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+  };
+
   const saveAsReusable = async () => {
     if (!selectedNode || selectedNode.type !== "section") {
       toast.error("Select a section first.");
@@ -379,6 +393,10 @@ export function PageBuilder({
           <div className="ml-auto flex items-center gap-2">
             <ToolbarButton title="Save a reusable section from the selected section" onClick={saveAsReusable}>
               <Recycle className="h-4 w-4" />
+            </ToolbarButton>
+
+            <ToolbarButton title="Save this page as a template" onClick={saveAsPageTemplate}>
+              <LayoutTemplate className="h-4 w-4" />
             </ToolbarButton>
 
             <button
