@@ -1,12 +1,15 @@
 import { PageHeader } from "@/components/admin/ui";
 import { DocumentForm } from "@/components/admin/DocumentForm";
 import { DOC_LABEL, DOC_STATUSES, type DocKind } from "@/lib/documents";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 const KIND: DocKind = "INVOICE";
 
-export default function NewDocumentPage() {
+export default async function NewDocumentPage() {
+  await requirePermission("documents:create");
+
   const label = DOC_LABEL[KIND];
   return (
     <div>

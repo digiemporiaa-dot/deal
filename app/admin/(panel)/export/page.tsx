@@ -3,10 +3,15 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/ui";
 import { ExportPanel } from "@/components/admin/ExportPanel";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExportPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("export:data");
+
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role;
   if (!role || !["SUPER_ADMIN", "ADMIN"].includes(role)) redirect("/admin/dashboard");

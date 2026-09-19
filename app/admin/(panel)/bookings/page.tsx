@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
 import { BookingStatusSelect } from "@/components/admin/BookingStatusSelect";
 import type { Prisma } from "@prisma/client";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,10 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<{ q?: string; payment?: string }>;
 }) {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("bookings:view");
+
   const sp = await searchParams;
   const where: Prisma.BookingWhereInput = {};
   if (sp.payment) where.paymentStatus = sp.payment;

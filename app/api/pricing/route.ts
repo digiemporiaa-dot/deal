@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePrice } from "@/lib/pricing";
+import { limitFor } from "@/lib/rate-limit";
+import { ipFromRequest } from "@/lib/guard";
+import { toSafeError } from "@/lib/errors";
 
 const quoteSchema = z.object({
   packageId: z.string().min(1),
@@ -9,7 +12,17 @@ const quoteSchema = z.object({
   couponCode: z.string().max(40).optional(),
 });
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
+  const throttle = limitFor("pricing", ipFromRequest(request));
+  if (!throttle.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(throttle.retryAfter) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -25,7 +38,8 @@ export async function POST(request: Request) {
   try {
     const price = await calculatePrice(parsed.data);
     return NextResponse.json({ ok: true, price });
-  } catch {
+  } catch (err) {
+    toSafeError(err, "api.pricing");
     return NextResponse.json({ ok: false, error: "Could not calculate price" }, { status: 500 });
   }
 }

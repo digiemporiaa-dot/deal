@@ -14,15 +14,21 @@ type FormValues = {
   title: string; slug: string; excerpt: string; coverImage: string;
   categoryId: string; status: "DRAFT" | "PUBLISHED"; featured: boolean;
   tags: string; seoTitle: string; seoDescription: string;
+  /** Editorial links that drive the related-content sections. */
+  destinationId: string; packageId: string;
 };
 
 export function BlogForm({
   categories,
+  destinations = [],
+  packages = [],
   initial,
   initialContent,
   blogId,
 }: {
   categories: { id: string; name: string }[];
+  destinations?: { id: string; name: string }[];
+  packages?: { id: string; name: string }[];
   initial?: Partial<FormValues>;
   initialContent?: string;
   blogId?: string;
@@ -33,7 +39,12 @@ export function BlogForm({
   const [error, setError] = React.useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
-    defaultValues: { title: "", slug: "", excerpt: "", coverImage: "", categoryId: "", status: "DRAFT", featured: false, tags: "", seoTitle: "", seoDescription: "", ...initial },
+    defaultValues: {
+      title: "", slug: "", excerpt: "", coverImage: "", categoryId: "", status: "DRAFT",
+      featured: false, tags: "", seoTitle: "", seoDescription: "",
+      destinationId: "", packageId: "",
+      ...initial,
+    },
   });
 
   const onSubmit = async (v: FormValues) => {
@@ -44,6 +55,7 @@ export function BlogForm({
       coverImage: v.coverImage, categoryId: v.categoryId, status: v.status, featured: v.featured,
       tags: v.tags ? v.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
       seoTitle: v.seoTitle, seoDescription: v.seoDescription,
+      destinationId: v.destinationId, packageId: v.packageId,
     };
     const res: ActionResult = await saveBlog(payload, blogId);
     if (res.ok) { router.push("/admin/blogs"); router.refresh(); }
@@ -75,6 +87,34 @@ export function BlogForm({
           </div>
           <div><Label>Tags (comma-separated)</Label><Input {...register("tags")} placeholder="dubai, travel tips" /></div>
           <div><Label>Slug (optional)</Label><Input {...register("slug")} /></div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="mb-1 text-sm font-semibold text-slate-900">Related content</h3>
+            <p className="mb-3 text-xs text-slate-500">
+              Link this post to a destination or package and it will appear on those pages, and
+              they will appear here.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <Label>Destination</Label>
+                <Select {...register("destinationId")}>
+                  <option value="">None</option>
+                  {destinations.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Package</Label>
+                <Select {...register("packageId")}>
+                  <option value="">None</option>
+                  {packages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">

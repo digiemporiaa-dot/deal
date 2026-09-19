@@ -3,10 +3,15 @@ import { prisma } from "@/lib/db";
 import { PageHeader, Card, EmptyState, AdminButtonLink } from "@/components/admin/ui";
 import { Badge } from "@/components/ui/Badge";
 import { DestinationRowActions } from "@/components/admin/DestinationRowActions";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDestinationsPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("destinations:view");
+
   const destinations = await prisma.destination.findMany({
     include: { _count: { select: { packages: true } } },
     orderBy: { name: "asc" },
@@ -47,7 +52,7 @@ export default async function AdminDestinationsPage() {
                         {d.isFeatured && <Badge tone="amber">Featured</Badge>}
                       </div>
                     </td>
-                    <td className="px-4 py-3"><DestinationRowActions id={d.id} published={d.isPublished} featured={d.isFeatured} /></td>
+                    <td className="px-4 py-3"><DestinationRowActions id={d.id} name={d.name} published={d.isPublished} featured={d.isFeatured} /></td>
                   </tr>
                 ))}
               </tbody>

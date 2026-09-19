@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { assignLead } from "@/app/admin/(panel)/leads/actions";
+import { useToast } from "@/components/admin/Toast";
 
 export type TeamMember = { id: string; name: string; role: string };
 
@@ -18,20 +19,35 @@ export function LeadAssignSelect({
   className?: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const [current, setCurrent] = React.useState(value ?? "");
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => setCurrent(value ?? ""), [value]);
 
   return (
     <div>
       <select
-        value={value ?? ""}
+        value={current}
         disabled={pending}
+        aria-label="Assign lead"
         onChange={async (e) => {
+          const next = e.target.value;
+          const previous = current;
+          setCurrent(next);
           setPending(true);
           setError(null);
-          const res = await assignLead(leadId, e.target.value);
-          if (!res.ok) setError(res.error);
-          router.refresh();
+          const res = await assignLead(leadId, next);
+          if (res.ok) {
+            toast.success(next ? "Lead assigned." : "Lead unassigned.");
+            router.refresh();
+          } else {
+            // Keep the select showing what the database actually holds.
+            setCurrent(previous);
+            setError(res.error);
+            toast.error(res.error);
+          }
           setPending(false);
         }}
         className={`h-9 rounded-lg border border-slate-300 px-2 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-50 ${className}`}

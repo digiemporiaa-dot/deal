@@ -3,10 +3,14 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/admin/ui";
 import { PackageForm } from "@/components/admin/PackageForm";
 import { toNumber, parseList } from "@/lib/utils";
+import { SeoPanelLoader } from "@/components/admin/SeoPanelLoader";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditPackagePage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePermission("packages:update");
+
   const { id } = await params;
   const [pkg, destinations, categories] = await Promise.all([
     prisma.travelPackage.findUnique({
@@ -46,6 +50,7 @@ export default async function EditPackagePage({ params }: { params: Promise<{ id
     bookingEnabled: pkg.bookingEnabled,
     seoTitle: pkg.seoTitle ?? "",
     seoDescription: pkg.seoDescription ?? "",
+    tags: parseList(pkg.tags).join(", "),
     highlights: parseList(pkg.highlights).length ? parseList(pkg.highlights).map((value) => ({ value })) : [{ value: "" }],
     inclusions: pkg.inclusions.length ? pkg.inclusions.map((i) => ({ value: i.text })) : [{ value: "" }],
     exclusions: pkg.exclusions.length ? pkg.exclusions.map((e) => ({ value: e.text })) : [{ value: "" }],
@@ -70,6 +75,7 @@ export default async function EditPackagePage({ params }: { params: Promise<{ id
     <div>
       <PageHeader title="Edit Package" description={pkg.name} />
       <PackageForm destinations={destinations} categories={categories} initial={initial} packageId={pkg.id} />
+      <SeoPanelLoader entityType="PACKAGE" entityId={pkg.id} previewPath={`/packages/${pkg.slug}`} />
     </div>
   );
 }

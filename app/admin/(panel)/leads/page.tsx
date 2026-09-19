@@ -1,200 +1,296 @@
 import Link from "next/link";
-import { Phone, Mail, MessageCircle, CalendarClock } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { PageHeader, Card, EmptyState } from "@/components/admin/ui";
-import { formatDate } from "@/lib/utils";
-import { LeadStatusSelect } from "@/components/admin/LeadStatusSelect";
-import { LeadAssignSelect } from "@/components/admin/LeadAssignSelect";
-import { auth } from "@/lib/auth";
-import { isLeadOwnerOnly, canAssignLeads } from "@/lib/permissions";
-import type { Prisma } from "@prisma/client";
+import { requirePermission, currentUser } from "@/lib/guard";
+import { canAssignLeads, isLeadOwnerOnly } from "@/lib/permissions";
+import { listLeads, leadPipelineCounts, leadSourceOptions } from "@/lib/services/crm";
+import { leadQuerySchema } from "@/lib/validation";
+import { LEAD_STATUSES, LEAD_PRIORITIES, leadStatusLabel, leadSourceLabel } from "@/lib/crm";
+import { PageHeader, Card, EmptyState, FilterBar, Pagination } from "@/components/admin/ui";
+import { Input, Label, Select } from "@/components/ui/Field";
+import { LeadTable } from "@/components/admin/LeadTable";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LIST = ["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST"];
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default async function LeadsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ status?: string; q?: string; due?: string; owner?: string }>;
-}) {
-  const sp = await searchParams;
-  const session = await auth();
-  const myId = session?.user?.id ?? "";
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  const ownLeadsOnly = isLeadOwnerOnly(role);
-  const mayAssign = canAssignLeads(role);
-  const where: Prisma.LeadWhereInput = {};
-  if (sp.status) where.status = sp.status as Prisma.LeadWhereInput["status"];
-  if (sp.q) where.OR = [
-    { name: { contains: sp.q } },
-    { phone: { contains: sp.q } },
-    { destination: { contains: sp.q } },
-  ];
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-  if (sp.due === "1") where.nextFollowUpAt = { not: null, lte: endOfToday };
-  if (ownLeadsOnly) {
-    // Sales executives can only ever see their own leads, whatever the URL says.
-    where.assignedToId = myId || "__none__";
-  } else {
-    if (sp.owner === "me" && myId) where.assignedToId = myId;
-    else if (sp.owner === "none") where.assignedToId = null;
-    else if (sp.owner) where.assignedToId = sp.owner; // a specific team member's id
-  }
-  const scope: Prisma.LeadWhereInput = ownLeadsOnly ? { assignedToId: myId || "__none__" } : {};
+export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
+  await requirePermission("leads:view");
+  const actor = await currentUser();
 
-  const [leads, counts, dueCount, myCount, members] = await Promise.all([
-    prisma.lead.findMany({
-      where,
-      orderBy: [{ nextFollowUpAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
-      include: { _count: { select: { notes: true } }, assignedTo: { select: { id: true, name: true } } },
-    }),
-    prisma.lead.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
-    prisma.lead.count({ where: { ...scope, nextFollowUpAt: { not: null, lte: endOfToday } } }),
-    myId ? prisma.lead.count({ where: { assignedToId: myId } }) : Promise.resolve(0),
+  const raw = await searchParams;
+  const parsed = leadQuerySchema.safeParse({
+    q: first(raw.q),
+    status: first(raw.status),
+    source: first(raw.source),
+    priority: first(raw.priority),
+    destination: first(raw.destination),
+    owner: first(raw.owner),
+    budget: first(raw.budget),
+    due: first(raw.due),
+    from: first(raw.from),
+    to: first(raw.to),
+    sort: first(raw.sort) ?? "followup",
+    page: first(raw.page) ?? 1,
+    perPage: first(raw.perPage) ?? 25,
+  });
+
+  // An invalid query string falls back to the default view rather than
+  // reaching Prisma with unvalidated values.
+  const query = parsed.success ? parsed.data : leadQuerySchema.parse({});
+
+  const ownLeadsOnly = isLeadOwnerOnly(actor?.role);
+  const mayAssign = canAssignLeads(actor?.role);
+
+  const [{ rows, total, page, pageCount }, counts, sources, members] = await Promise.all([
+    listLeads(query, actor),
+    leadPipelineCounts(actor),
+    leadSourceOptions(actor),
     mayAssign
-      ? prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } })
-      : Promise.resolve([]),
+      ? prisma.user.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, role: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([] as { id: string; name: string; role: string }[]),
   ]);
 
-  const countFor = (status: string) => counts.find((c) => c.status === status)?._count._all ?? 0;
+  const params: Record<string, string | undefined> = {
+    q: query.q,
+    status: query.status,
+    source: query.source,
+    priority: query.priority,
+    destination: query.destination,
+    owner: query.owner,
+    budget: query.budget,
+    due: query.due,
+    from: query.from || undefined,
+    to: query.to || undefined,
+    sort: query.sort,
+    perPage: String(query.perPage),
+  };
 
   return (
     <div>
       <PageHeader
-        title={ownLeadsOnly ? "My Leads" : "Leads & Enquiries"}
-        description={ownLeadsOnly ? "Enquiries assigned to you — follow up and close them" : "Track and follow up with potential customers"}
+        title={ownLeadsOnly ? "My Leads" : "Leads & CRM"}
+        description={
+          ownLeadsOnly
+            ? "Enquiries assigned to you — follow up and close them."
+            : "Every enquiry, from first touch to booking."
+        }
       />
 
-      {/* Pipeline summary */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 xl:grid-cols-8">
-        {STATUS_LIST.map((s) => (
+      {/* Pipeline */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+        {LEAD_STATUSES.map((status) => (
           <Link
-            key={s}
-            href={`/admin/leads?status=${s}`}
+            key={status}
+            href={`/admin/leads?status=${status}`}
             className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
           >
-            <p className="text-lg font-bold text-slate-900">{countFor(s)}</p>
-            <p className="text-xs font-medium text-slate-500">{s.replace(/_/g, " ")}</p>
+            <p className="text-lg font-bold text-slate-900">{counts.statusCount(status)}</p>
+            <p className="text-xs font-medium text-slate-500">{leadStatusLabel(status)}</p>
           </Link>
         ))}
-        {!ownLeadsOnly && (
-          <Link
-            href="/admin/leads?owner=me"
-            className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
-          >
-            <p className="text-lg font-bold text-slate-900">{myCount}</p>
-            <p className="text-xs font-medium text-slate-500">MY LEADS</p>
-          </Link>
-        )}
         <Link
-          href="/admin/leads?due=1"
+          href="/admin/leads?due=overdue"
           className={`rounded-xl border p-3 text-center transition-colors ${
-            dueCount > 0 ? "border-red-300 bg-red-50 hover:bg-red-100" : "border-slate-200 bg-white hover:bg-slate-50"
+            counts.overdue > 0
+              ? "border-red-300 bg-red-50 hover:bg-red-100"
+              : "border-slate-200 bg-white hover:bg-slate-50"
           }`}
         >
-          <p className={`text-lg font-bold ${dueCount > 0 ? "text-red-700" : "text-slate-900"}`}>{dueCount}</p>
-          <p className={`text-xs font-medium ${dueCount > 0 ? "text-red-600" : "text-slate-500"}`}>DUE TODAY</p>
+          <p className={`text-lg font-bold ${counts.overdue > 0 ? "text-red-700" : "text-slate-900"}`}>
+            {counts.overdue}
+          </p>
+          <p className={`text-xs font-medium ${counts.overdue > 0 ? "text-red-600" : "text-slate-500"}`}>
+            Overdue
+          </p>
         </Link>
       </div>
 
-      <Card className="mb-4 p-3">
-        <form className="flex flex-wrap gap-2">
-          <input name="q" defaultValue={sp.q} placeholder="Search name, phone, destination…" className="h-10 min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none" />
-          <select name="status" defaultValue={sp.status} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
-            <option value="">All statuses</option>
-            {STATUS_LIST.map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-          <select name="due" defaultValue={sp.due} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
-            <option value="">All leads</option>
-            <option value="1">Follow-up due</option>
-          </select>
-          {!ownLeadsOnly && (
-            <select name="owner" defaultValue={sp.owner} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
-              <option value="">Anyone</option>
-              <option value="me">Assigned to me</option>
-              <option value="none">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-          )}
-          <button className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800">Filter</button>
-        </form>
-      </Card>
+      {/* Follow-up shortcuts */}
+      <div className="mb-4 flex flex-wrap gap-2 text-sm">
+        <Link
+          href="/admin/leads?due=today"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Today&rsquo;s follow-ups
+          <span className="rounded bg-slate-100 px-1.5 text-xs">{counts.dueToday}</span>
+        </Link>
+        <Link
+          href="/admin/leads?due=upcoming"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Upcoming
+          <span className="rounded bg-slate-100 px-1.5 text-xs">{counts.upcoming}</span>
+        </Link>
+        {!ownLeadsOnly && (
+          <Link
+            href="/admin/leads?owner=none"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Unassigned
+            <span className="rounded bg-slate-100 px-1.5 text-xs">{counts.unassigned}</span>
+          </Link>
+        )}
+      </div>
 
-      {leads.length === 0 ? (
-        <EmptyState
-        title={ownLeadsOnly ? "No leads assigned to you yet" : "No leads found"}
-        description={ownLeadsOnly ? "Your manager will assign enquiries to you — they will appear here." : "Enquiries submitted from the website appear here."}
-      />
-      ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Destination</th>
-                  <th className="px-4 py-3">Received</th>
-                  <th className="px-4 py-3">Follow-up</th>
-                  {!ownLeadsOnly && <th className="px-4 py-3">Assigned to</th>}
-                  <th className="px-4 py-3">Activity</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">View</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {leads.map((l) => {
-                  const overdue = l.nextFollowUpAt ? new Date(l.nextFollowUpAt) <= endOfToday : false;
-                  return (
-                    <tr key={l.id} className={overdue ? "bg-red-50/60 hover:bg-red-50" : "hover:bg-slate-50"}>
-                      <td className="px-4 py-3 font-medium text-slate-900">{l.name}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <div className="flex flex-col gap-0.5 text-xs">
-                          <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {l.phone}</span>
-                          {l.email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" /> {l.email}</span>}
-                          {l.whatsapp && <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {l.whatsapp}</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{l.destination || "—"}</td>
-                      <td className="px-4 py-3 text-slate-500">{formatDate(l.createdAt)}</td>
-                      <td className="px-4 py-3">
-                        {l.nextFollowUpAt ? (
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${overdue ? "text-red-600" : "text-slate-600"}`}>
-                            <CalendarClock className="h-3 w-3" /> {formatDate(l.nextFollowUpAt)}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </td>
-                      {!ownLeadsOnly && (
-                        <td className="px-4 py-3">
-                          {mayAssign ? (
-                            <LeadAssignSelect leadId={l.id} value={l.assignedToId} members={members} />
-                          ) : (
-                            <span className="text-xs text-slate-500">{l.assignedTo?.name ?? "—"}</span>
-                          )}
-                        </td>
-                      )}
-                      <td className="px-4 py-3 text-xs text-slate-500">{l._count.notes} entries</td>
-                      <td className="px-4 py-3"><LeadStatusSelect id={l.id} value={l.status} /></td>
-                      <td className="px-4 py-3 text-right">
-                        <Link href={`/admin/leads/${l.id}`} className="text-sm font-semibold text-brand-600 hover:underline">Open</Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <FilterBar>
+        <div className="min-w-[220px] flex-1">
+          <Label htmlFor="q">Search</Label>
+          <Input id="q" name="q" defaultValue={query.q ?? ""} placeholder="Name, phone, email or campaign" />
+        </div>
+        <div>
+          <Label htmlFor="status">Status</Label>
+          <Select id="status" name="status" defaultValue={query.status ?? ""}>
+            <option value="">All statuses</option>
+            {LEAD_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {leadStatusLabel(status)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="source">Source</Label>
+          <Select id="source" name="source" defaultValue={query.source ?? ""}>
+            <option value="">All sources</option>
+            {sources.map((source) => (
+              <option key={source} value={source}>
+                {leadSourceLabel(source)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="priority">Priority</Label>
+          <Select id="priority" name="priority" defaultValue={query.priority ?? ""}>
+            <option value="">Any</option>
+            {LEAD_PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {priority.charAt(0) + priority.slice(1).toLowerCase()}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="destination">Destination</Label>
+          <Input
+            id="destination"
+            name="destination"
+            defaultValue={query.destination ?? ""}
+            placeholder="Bali"
+          />
+        </div>
+        <div>
+          <Label htmlFor="budget">Budget</Label>
+          <Input id="budget" name="budget" defaultValue={query.budget ?? ""} placeholder="50000" />
+        </div>
+        {!ownLeadsOnly && (
+          <div>
+            <Label htmlFor="owner">Assigned to</Label>
+            <Select id="owner" name="owner" defaultValue={query.owner ?? ""}>
+              <option value="">Anyone</option>
+              <option value="me">Me</option>
+              <option value="none">Unassigned</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </Select>
           </div>
+        )}
+        <div>
+          <Label htmlFor="due">Follow-up</Label>
+          <Select id="due" name="due" defaultValue={query.due ?? ""}>
+            <option value="">All</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="upcoming">Upcoming</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="from">Created from</Label>
+          <Input id="from" name="from" type="date" defaultValue={query.from ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="to">to</Label>
+          <Input id="to" name="to" type="date" defaultValue={query.to ?? ""} />
+        </div>
+        <div>
+          <Label htmlFor="sort">Sort</Label>
+          <Select id="sort" name="sort" defaultValue={query.sort}>
+            <option value="followup">Follow-up date</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="activity">Recent activity</option>
+          </Select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          Filter
+        </button>
+        <a
+          href="/admin/leads"
+          className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Reset
+        </a>
+      </FilterBar>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          title={ownLeadsOnly ? "No leads assigned to you yet" : "No leads match these filters"}
+          description={
+            ownLeadsOnly
+              ? "Your manager will assign enquiries to you — they will appear here."
+              : "Enquiries submitted from the website appear here. Try clearing the filters."
+          }
+        />
+      ) : (
+        <Card className="overflow-hidden p-0">
+          <LeadTable
+            leads={rows.map((lead) => ({
+              id: lead.id,
+              name: lead.name,
+              email: lead.email,
+              phone: lead.phone,
+              whatsapp: lead.whatsapp,
+              destination: lead.destination,
+              budget: lead.budget,
+              source: lead.source,
+              campaign: lead.campaign,
+              status: lead.status,
+              priority: lead.priority,
+              createdAt: lead.createdAt.toISOString(),
+              nextFollowUpAt: lead.nextFollowUpAt?.toISOString() ?? null,
+              lastActivityAt: lead.lastActivityAt?.toISOString() ?? null,
+              assignedToId: lead.assignedToId,
+              assignedToName: lead.assignedTo?.name ?? null,
+              activityCount: lead._count.notes,
+            }))}
+            members={members}
+            showOwner={!ownLeadsOnly}
+            canAssign={mayAssign}
+          />
         </Card>
       )}
+
+      <Pagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        basePath="/admin/leads"
+        params={params}
+      />
     </div>
   );
 }

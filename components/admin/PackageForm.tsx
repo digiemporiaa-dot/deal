@@ -30,6 +30,8 @@ type FormValues = {
   bookingEnabled: boolean;
   seoTitle: string;
   seoDescription: string;
+  /** Comma-separated travel themes, used to suggest related packages. */
+  tags: string;
   highlights: { value: string }[];
   inclusions: { value: string }[];
   exclusions: { value: string }[];
@@ -66,7 +68,7 @@ export function PackageForm({
       name: "", slug: "", destinationId: "", categoryId: "", shortDescription: "", description: "",
       durationDays: 5, durationNights: 4, startingPrice: 0, discountPrice: undefined, currency: "INR",
       minTravellers: 1, maxTravellers: 20, featured: false, published: true, bookingEnabled: true,
-      seoTitle: "", seoDescription: "",
+      seoTitle: "", seoDescription: "", tags: "",
       highlights: [{ value: "" }],
       inclusions: [{ value: "" }],
       exclusions: [{ value: "" }],
@@ -102,6 +104,11 @@ export function PackageForm({
       bookingEnabled: values.bookingEnabled,
       seoTitle: values.seoTitle,
       seoDescription: values.seoDescription,
+      tags: (values.tags || "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, 20),
       highlights: values.highlights.map((h) => h.value).filter(Boolean),
       inclusions: values.inclusions.map((i) => i.value).filter(Boolean),
       exclusions: values.exclusions.map((e) => e.value).filter(Boolean),
@@ -318,6 +325,13 @@ export function PackageForm({
         {/* SEO */}
         <Section show={tab === "SEO"}>
           <div className="grid grid-cols-1 gap-4">
+            <div>
+              <Label>Travel themes</Label>
+              <Input {...register("tags")} placeholder="honeymoon, beach, luxury" />
+              <p className="mt-1 text-xs text-slate-500">
+                Comma separated. Used to suggest related packages to visitors.
+              </p>
+            </div>
             <div><Label>SEO title</Label><Input {...register("seoTitle")} placeholder="Custom page title for search engines" /></div>
             <div><Label>Meta description</Label><Textarea rows={3} {...register("seoDescription")} placeholder="Up to 160 characters" /></div>
           </div>

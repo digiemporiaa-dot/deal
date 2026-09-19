@@ -4,10 +4,15 @@ import { PageHeader, Card, EmptyState, AdminButtonLink } from "@/components/admi
 import { Badge } from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
 import { PageRowActions } from "@/components/admin/PageRowActions";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPagesPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("pages:view");
+
   const pages = await prisma.page.findMany({ orderBy: { updatedAt: "desc" } });
   return (
     <div>
@@ -28,7 +33,7 @@ export default async function AdminPagesPage() {
                     <td className="px-4 py-3 text-slate-500">/{p.slug}</td>
                     <td className="px-4 py-3"><Badge tone={p.status === "PUBLISHED" ? "green" : "slate"}>{p.status}</Badge></td>
                     <td className="px-4 py-3 text-slate-500">{formatDate(p.updatedAt)}</td>
-                    <td className="px-4 py-3"><PageRowActions id={p.id} slug={p.slug} published={p.status === "PUBLISHED"} /></td>
+                    <td className="px-4 py-3"><PageRowActions id={p.id} title={p.title} slug={p.slug} published={p.status === "PUBLISHED"} /></td>
                   </tr>
                 ))}
               </tbody>

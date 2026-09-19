@@ -4,10 +4,15 @@ import { PageHeader, Card, EmptyState, AdminButtonLink } from "@/components/admi
 import { Badge } from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
 import { BlogRowActions } from "@/components/admin/BlogRowActions";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminBlogsPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("blogs:view");
+
   const posts = await prisma.blogPost.findMany({ include: { category: true }, orderBy: { createdAt: "desc" } });
   return (
     <div>
@@ -28,7 +33,7 @@ export default async function AdminBlogsPage() {
                     <td className="px-4 py-3 text-slate-600">{p.category?.name || "—"}</td>
                     <td className="px-4 py-3"><Badge tone={p.status === "PUBLISHED" ? "green" : "slate"}>{p.status}</Badge></td>
                     <td className="px-4 py-3 text-slate-500">{formatDate(p.createdAt)}</td>
-                    <td className="px-4 py-3"><BlogRowActions id={p.id} slug={p.slug} published={p.status === "PUBLISHED"} /></td>
+                    <td className="px-4 py-3"><BlogRowActions id={p.id} title={p.title} slug={p.slug} published={p.status === "PUBLISHED"} /></td>
                   </tr>
                 ))}
               </tbody>

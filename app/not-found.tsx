@@ -1,10 +1,33 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { permanentRedirect, redirect } from "next/navigation";
 import { Home, Compass, MapPin, Phone, Search } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { resolveRedirect } from "@/lib/redirects";
+import { PATHNAME_HEADER } from "@/lib/request-path";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * 404 handler, and the place database-managed redirects are applied.
+ *
+ * Resolving them here rather than in the middleware means the lookup only
+ * happens for URLs that matched no route — pages that exist pay nothing. The
+ * pathname arrives in a header set by the middleware, because a Server
+ * Component is not told which URL it is rendering.
+ */
 export default async function NotFound() {
+  const requestPath = (await headers()).get(PATHNAME_HEADER);
+
+  if (requestPath) {
+    const rule = await resolveRedirect(requestPath);
+    if (rule) {
+      // 301/308 are permanent; 302/307 keep the original URL indexed.
+      if (rule.statusCode === 301 || rule.statusCode === 308) permanentRedirect(rule.target);
+      redirect(rule.target);
+    }
+  }
+
   // Give the visitor somewhere to go instead of a dead end.
   let destinations: { id: string; name: string; slug: string }[] = [];
   try {

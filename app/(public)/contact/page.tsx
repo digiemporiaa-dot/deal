@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/seo";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { getSettings } from "@/lib/settings";
 import { SectionHeading } from "@/components/site/Section";
@@ -6,10 +7,14 @@ import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { WhatsAppLink } from "@/components/site/WhatsAppLink";
 import { GENERAL_ENQUIRY_MESSAGE } from "@/lib/whatsapp";
 
-export const metadata: Metadata = {
-  title: "Contact Us",
-  description: "Get in touch with the Vacationdeal team to plan your next holiday.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+  return buildMetadata({
+    path: "/contact",
+    title: "Contact Us",
+    description: `Get in touch with the ${settings.siteName} team to plan your next holiday.`,
+  });
+}
 
 export const dynamic = "force-dynamic";
 

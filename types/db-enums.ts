@@ -1,13 +1,9 @@
-// String-literal unions mirroring the enums the schema used under PostgreSQL.
-// SQLite has no native enums, so these columns are plain `String`; import these
-// aliases where a narrow type is helpful (validation lists, tone maps, etc.).
+// String-literal unions for the columns the schema stores as `String`.
+// Import these aliases where a narrow type is helpful (validation lists,
+// tone maps, status selects and so on).
 
-export type UserRole =
-  | "SUPER_ADMIN"
-  | "ADMIN"
-  | "CONTENT_MANAGER"
-  | "BOOKING_MANAGER"
-  | "SALES_EXECUTIVE";
+// Roles are defined in lib/permissions.ts, which is the source of truth.
+export type { Role as UserRole } from "@/lib/permissions";
 
 export type BookingStatus =
   | "PENDING"
@@ -20,7 +16,18 @@ export type BookingStatus =
 
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED";
 
-export type LeadStatus = "NEW" | "CONTACTED" | "FOLLOW_UP" | "QUALIFIED" | "CONVERTED" | "LOST";
+// CONVERTED is the "won" state; it keeps its original name because existing
+// rows use it. PROPOSAL_SENT was added with the CRM upgrade.
+export type LeadStatus =
+  | "NEW"
+  | "CONTACTED"
+  | "QUALIFIED"
+  | "PROPOSAL_SENT"
+  | "FOLLOW_UP"
+  | "CONVERTED"
+  | "LOST";
+
+export type LeadPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 
 export type DiscountType = "PERCENTAGE" | "FIXED";
 

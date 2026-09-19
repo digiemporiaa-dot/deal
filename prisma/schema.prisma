@@ -34,25 +34,29 @@ datasource db {
 // ─────────────────────────────────────────────────────────────
 
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String?
-  role         String    @default("CONTENT_MANAGER")
-  image        String?
-  isActive     Boolean   @default(true)
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String?
+  role          String    @default("CONTENT_MANAGER")
+  image         String?
+  isActive      Boolean   @default(true)
   emailVerified DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  accounts     Account[]
-  sessions     Session[]
-  leadNotes    LeadNote[]
-  blogPosts    BlogPost[]
-  assignedLeads Lead[]   @relation("LeadAssignee")
-  documents    SalesDocument[] @relation("DocumentAuthor")
+  accounts      Account[]
+  sessions      Session[]
+  leadNotes     LeadNote[]
+  blogPosts     BlogPost[]
+  assignedLeads Lead[]          @relation("LeadAssignee")
+  documents     SalesDocument[] @relation("DocumentAuthor")
+  activityLogs  ActivityLog[]
+  uploads       Media[]         @relation("MediaUploader")
 
   @@index([role])
+  @@index([isActive])
+  @@index([email])
 }
 
 model Account {
@@ -113,12 +117,14 @@ model Destination {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  images   DestinationImage[]
-  packages TravelPackage[]
-  faqs     Faq[]
+  images    DestinationImage[]
+  packages  TravelPackage[]
+  faqs      Faq[]
+  blogPosts BlogPost[]         @relation("BlogDestination")
 
   @@index([isPublished, isFeatured])
   @@index([country])
+  @@index([isPublished, name])
 }
 
 model DestinationImage {
@@ -164,6 +170,8 @@ model TravelPackage {
   featured         Boolean  @default(false)
   published        Boolean  @default(true)
   bookingEnabled   Boolean  @default(true)
+  // JSON-encoded string array — travel types / themes used for related content.
+  tags             String   @default("[]")
   seoTitle         String?
   seoDescription   String?
   createdAt        DateTime @default(now())
@@ -181,10 +189,14 @@ model TravelPackage {
   bookings    Booking[]
   reviews     Testimonial[]
   coupons     Coupon[]           @relation("CouponPackages")
+  blogPosts   BlogPost[]         @relation("BlogPackage")
 
   @@index([published, featured])
   @@index([destinationId])
   @@index([categoryId])
+  @@index([published, destinationId])
+  @@index([published, startingPrice])
+  @@index([createdAt])
 }
 
 model PackageImage {
@@ -261,14 +273,14 @@ model PackageActivity {
 // ─────────────────────────────────────────────────────────────
 
 model Faq {
-  id            String       @id @default(cuid())
+  id            String  @id @default(cuid())
   question      String
   answer        String
   packageId     String?
   destinationId String?
   pageId        String?
-  sortOrder     Int          @default(0)
-  published     Boolean      @default(true)
+  sortOrder     Int     @default(0)
+  published     Boolean @default(true)
 
   package     TravelPackage? @relation(fields: [packageId], references: [id], onDelete: Cascade)
   destination Destination?   @relation(fields: [destinationId], references: [id], onDelete: Cascade)
@@ -300,27 +312,38 @@ model Customer {
 }
 
 model Booking {
-  id              String        @id @default(cuid())
-  bookingNumber   String        @unique
+  id              String   @id @default(cuid())
+  bookingNumber   String   @unique
   customerId      String
   packageId       String
   travelDate      DateTime
-  adults          Int           @default(1)
-  children        Int           @default(0)
-  rooms           Int           @default(1)
+  adults          Int      @default(1)
+  children        Int      @default(0)
+  rooms           Int      @default(1)
   baseAmount      Decimal
-  discountAmount  Decimal       @default(0)
-  taxAmount       Decimal       @default(0)
+  discountAmount  Decimal  @default(0)
+  taxAmount       Decimal  @default(0)
   totalAmount     Decimal
-  advanceAmount   Decimal       @default(0)
-  remainingAmount Decimal       @default(0)
-  currency        String        @default("INR")
+  advanceAmount   Decimal  @default(0)
+  remainingAmount Decimal  @default(0)
+  currency        String   @default("INR")
   couponCode      String?
-  status          String        @default("PENDING")
-  paymentStatus   String        @default("PENDING")
+  status          String   @default("PENDING")
+  paymentStatus   String   @default("PENDING")
   specialRequests String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+
+  // ── Marketing attribution, copied from the same first-touch cookie the
+  //    lead form reads, so revenue can be reported by channel. ──
+  source      String  @default("DIRECT")
+  medium      String?
+  campaign    String?
+  landingPage String?
+  referrer    String?
+  gclid       String?
+  fbclid      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   customer Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   package  TravelPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
@@ -330,26 +353,32 @@ model Booking {
   @@index([paymentStatus])
   @@index([customerId])
   @@index([packageId])
+  @@index([createdAt])
+  @@index([travelDate])
+  @@index([paymentStatus, createdAt])
+  @@index([status, createdAt])
+  @@index([source])
 }
 
 model Payment {
-  id                String        @id @default(cuid())
+  id                String   @id @default(cuid())
   bookingId         String
-  razorpayOrderId   String?       @unique
-  razorpayPaymentId String?       @unique
+  razorpayOrderId   String?  @unique
+  razorpayPaymentId String?  @unique
   amount            Decimal
-  currency          String        @default("INR")
-  status            String        @default("PENDING")
+  currency          String   @default("INR")
+  status            String   @default("PENDING")
   paymentMethod     String?
   signature         String?
   notes             String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([bookingId])
   @@index([status])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -357,7 +386,7 @@ model Payment {
 // ─────────────────────────────────────────────────────────────
 
 model Lead {
-  id          String     @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   email       String?
   phone       String
@@ -367,23 +396,46 @@ model Lead {
   travellers  Int?
   budget      String?
   message     String?
-  source      String     @default("website")
-  status      String     @default("NEW")
-  nextFollowUpAt DateTime?
-  assignedToId String?
-  sequenceStage Int      @default(0)
-  sequenceStoppedAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  source      String    @default("website")
+  status      String    @default("NEW")
+  priority    String    @default("NORMAL")
+  country     String?
+  returnDate  DateTime?
+  adults      Int?
+  children    Int?
 
-  notes LeadNote[]
-  documents SalesDocument[]
-  assignedTo User? @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  // ── Marketing attribution (captured server-side on first touch) ──
+  medium      String?
+  campaign    String?
+  term        String?
+  content     String?
+  gclid       String?
+  fbclid      String?
+  landingPage String?
+  referrer    String?
+
+  nextFollowUpAt    DateTime?
+  lastActivityAt    DateTime?
+  assignedToId      String?
+  sequenceStage     Int       @default(0)
+  sequenceStoppedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  notes      LeadNote[]
+  documents  SalesDocument[]
+  assignedTo User?           @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([createdAt])
   @@index([nextFollowUpAt])
   @@index([assignedToId])
+  @@index([source])
+  @@index([priority])
+  @@index([status, createdAt])
+  @@index([assignedToId, status])
+  @@index([phone])
+  @@index([email])
 }
 
 model LeadNote {
@@ -401,6 +453,10 @@ model LeadNote {
   author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([leadId])
+  @@index([leadId, createdAt])
+  @@index([authorId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -415,27 +471,37 @@ model BlogCategory {
 }
 
 model BlogPost {
-  id            String     @id @default(cuid())
-  title         String
-  slug          String     @unique
-  excerpt       String?
-  content       String
-  coverImage    String?
-  tags          String     @default("[]")
-  status        String     @default("DRAFT")
-  featured      Boolean    @default(false)
-  categoryId    String?
-  authorId      String?
-  seoTitle      String?
+  id             String    @id @default(cuid())
+  title          String
+  slug           String    @unique
+  excerpt        String?
+  content        String
+  coverImage     String?
+  tags           String    @default("[]")
+  status         String    @default("DRAFT")
+  featured       Boolean   @default(false)
+  categoryId     String?
+  authorId       String?
+  // Optional editorial links used by the internal-linking engine.
+  destinationId  String?
+  packageId      String?
+  seoTitle       String?
   seoDescription String?
-  publishedAt   DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  category BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  author   User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  category    BlogCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author      User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  destination Destination?   @relation("BlogDestination", fields: [destinationId], references: [id], onDelete: SetNull)
+  package     TravelPackage? @relation("BlogPackage", fields: [packageId], references: [id], onDelete: SetNull)
 
   @@index([status, featured])
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@index([destinationId])
+  @@index([packageId])
+  @@index([authorId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -443,15 +509,15 @@ model BlogPost {
 // ─────────────────────────────────────────────────────────────
 
 model Testimonial {
-  id            String   @id @default(cuid())
-  customerName  String
-  image         String?
-  rating        Int      @default(5)
-  review        String
-  packageId     String?
-  destination   String?
-  published     Boolean  @default(true)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  customerName String
+  image        String?
+  rating       Int      @default(5)
+  review       String
+  packageId    String?
+  destination  String?
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
   package TravelPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
@@ -463,18 +529,18 @@ model Testimonial {
 // ─────────────────────────────────────────────────────────────
 
 model Coupon {
-  id             String       @id @default(cuid())
-  code           String       @unique
-  discountType   String       @default("PERCENTAGE")
+  id             String    @id @default(cuid())
+  code           String    @unique
+  discountType   String    @default("PERCENTAGE")
   discountAmount Decimal
   minAmount      Decimal?
   maxDiscount    Decimal?
   startDate      DateTime?
   expiryDate     DateTime?
   usageLimit     Int?
-  usedCount      Int          @default(0)
-  active         Boolean      @default(true)
-  createdAt      DateTime     @default(now())
+  usedCount      Int       @default(0)
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
 
   packages TravelPackage[] @relation("CouponPackages")
 
@@ -486,17 +552,32 @@ model Coupon {
 // ─────────────────────────────────────────────────────────────
 
 model Media {
-  id        String   @id @default(cuid())
-  url       String
-  filename  String
-  mimeType  String
-  size      Int
-  alt       String?
-  width     Int?
-  height    Int?
-  createdAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  url              String
+  filename         String
+  originalFilename String?
+  mimeType         String
+  size             Int
+  alt              String?
+  title            String?
+  caption          String?
+  folder           String   @default("general")
+  // Provider-specific handle used to delete the object again
+  // ("local" paths, a Vercel Blob URL, or an S3/R2 object key).
+  storageProvider  String   @default("local")
+  storageKey       String?
+  width            Int?
+  height           Int?
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  createdBy User? @relation("MediaUploader", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([mimeType])
+  @@index([folder])
+  @@index([createdAt])
+  @@index([createdById])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -504,18 +585,20 @@ model Media {
 // ─────────────────────────────────────────────────────────────
 
 model Page {
-  id             String     @id @default(cuid())
+  id             String   @id @default(cuid())
   title          String
-  slug           String     @unique
+  slug           String   @unique
   content        String
-  status         String     @default("PUBLISHED")
+  status         String   @default("PUBLISHED")
   seoTitle       String?
   seoDescription String?
   ogImage        String?
   sections       String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   faqs           Faq[]
+
+  @@index([status])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -533,41 +616,41 @@ model SiteSetting {
 // ─────────────────────────────────────────────────────────────
 
 model SalesDocument {
-  id            String   @id @default(cuid())
-  kind          String   @default("QUOTATION")
-  number        String   @unique
-  status        String   @default("DRAFT")
+  id     String @id @default(cuid())
+  kind   String @default("QUOTATION")
+  number String @unique
+  status String @default("DRAFT")
 
-  leadId        String?
-  bookingId     String?
-  createdById   String?
+  leadId      String?
+  bookingId   String?
+  createdById String?
 
-  customerName  String
-  customerEmail String?
-  customerPhone String?
+  customerName   String
+  customerEmail  String?
+  customerPhone  String?
   billingAddress String?
 
-  title         String?
-  destination   String?
-  travelDate    DateTime?
-  travellers    Int?
-  validUntil    DateTime?
-  dueDate       DateTime?
+  title       String?
+  destination String?
+  travelDate  DateTime?
+  travellers  Int?
+  validUntil  DateTime?
+  dueDate     DateTime?
 
-  currency      String   @default("INR")
-  discount      Decimal  @default(0)
-  taxPercent    Decimal  @default(0)
-  amountPaid    Decimal  @default(0)
+  currency   String  @default("INR")
+  discount   Decimal @default(0)
+  taxPercent Decimal @default(0)
+  amountPaid Decimal @default(0)
 
-  notes         String?
-  terms         String?
+  notes String?
+  terms String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   items     SalesDocumentItem[]
-  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  createdBy User?    @relation("DocumentAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  lead      Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdBy User?               @relation("DocumentAuthor", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([kind])
   @@index([status])
@@ -590,15 +673,98 @@ model SalesDocumentItem {
 }
 
 model Redirect {
-  id        String   @id @default(cuid())
-  source    String   @unique
-  target    String
-  permanent Boolean  @default(true)
-  hits      Int      @default(0)
-  isActive  Boolean  @default(true)
-  note      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  source     String   @unique
+  target     String
+  // `permanent` is kept for backward compatibility with existing rows;
+  // `statusCode` is authoritative (301 | 302 | 307 | 308).
+  permanent  Boolean  @default(true)
+  statusCode Int      @default(301)
+  hits       Int      @default(0)
+  isActive   Boolean  @default(true)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([isActive])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Admin activity / audit log
+//
+//  Every privileged mutation writes one row here. Rows are append-only:
+//  nothing in the application updates or deletes them.
+// ─────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  // Denormalised so the log still reads correctly after a user is deleted.
+  userName    String?
+  userRole    String?
+  // LOGIN | LOGOUT | CREATE | UPDATE | DELETE | STATUS_CHANGE | PAYMENT |
+  // ASSIGN | UPLOAD | EXPORT | SETTINGS
+  action      String
+  // "Booking", "Lead", "TravelPackage", "Media", …
+  entity      String
+  entityId    String?
+  description String
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Reusable SEO metadata
+//
+//  Attached polymorphically to any indexable record (entityType +
+//  entityId) so SEO controls can be added to new content types without
+//  widening every content table. Legacy `seoTitle` / `seoDescription`
+//  columns on the content models keep working as the fallback.
+// ─────────────────────────────────────────────────────────────
+
+model SeoMeta {
+  id         String @id @default(cuid())
+  // PACKAGE | DESTINATION | BLOG | PAGE | ROUTE
+  entityType String
+  // The record id, or the pathname for entityType = ROUTE.
+  entityId   String
+
+  seoTitle       String?
+  seoDescription String?
+  canonicalUrl   String?
+  focusKeyword   String?
+
+  ogTitle       String?
+  ogDescription String?
+  ogImage       String?
+
+  twitterTitle       String?
+  twitterDescription String?
+  twitterImage       String?
+
+  robotsIndex  Boolean @default(true)
+  robotsFollow Boolean @default(true)
+
+  // Extra JSON-LD emitted alongside the generated schema. `schemaType` is
+  // informational; `schemaJson` must be a valid JSON-LD object or array.
+  schemaType String?
+  schemaJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([entityType, entityId])
+  @@index([entityType])
+  @@index([robotsIndex])
 }

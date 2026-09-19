@@ -13,25 +13,40 @@ import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { WhatsAppLink } from "@/components/site/WhatsAppLink";
 import { LinkButton } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { JsonLd, breadcrumbLd, faqLd } from "@/components/seo/JsonLd";
+import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  buildMetadata,
+  getSeoMeta,
+  breadcrumbSchema,
+  faqSchema,
+  touristTripSchema,
+  extraSchema,
+  siteUrl as canonicalOrigin,
+} from "@/lib/seo";
 import { packageEnquiryMessage } from "@/lib/whatsapp";
+import { getRelatedPackages, getRelatedDestinations, getRelatedBlogs } from "@/lib/related";
+import { RelatedPackages, RelatedDestinations, RelatedBlogs } from "@/components/site/RelatedContent";
 
 type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const pkg = await getPackageBySlug(slug);
-  if (!pkg) return { title: "Package not found" };
-  return {
-    title: pkg.seoTitle || pkg.name,
-    description: pkg.seoDescription || pkg.shortDescription,
-    alternates: { canonical: `/packages/${pkg.slug}` },
-    openGraph: {
+  if (!pkg) return { title: "Package not found", robots: { index: false, follow: false } };
+
+  const overrides = await getSeoMeta("PACKAGE", pkg.id);
+  return buildMetadata(
+    {
+      path: `/packages/${pkg.slug}`,
+      // The legacy per-record columns stay the first fallback.
       title: pkg.seoTitle || pkg.name,
       description: pkg.seoDescription || pkg.shortDescription,
-      images: pkg.images[0]?.url ? [pkg.images[0].url] : undefined,
+      image: pkg.images[0]?.url ?? null,
+      updatedAt: pkg.updatedAt,
+      type: "product",
     },
-  };
+    overrides,
+  );
 }
 
 export default async function PackageDetail({ params }: Params) {
@@ -39,7 +54,8 @@ export default async function PackageDetail({ params }: Params) {
   const [pkg, settings] = await Promise.all([getPackageBySlug(slug), getSettings()]);
   if (!pkg) notFound();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const siteUrl = canonicalOrigin();
+  const packageTags = parseList(pkg.tags);
   const highlights = parseList(pkg.highlights);
   const price = pkg.discountPrice != null ? toNumber(pkg.discountPrice) : toNumber(pkg.startingPrice);
   const hasDiscount = pkg.discountPrice != null;
@@ -48,31 +64,62 @@ export default async function PackageDetail({ params }: Params) {
       ? pkg.reviews.reduce((a, r) => a + r.rating, 0) / pkg.reviews.length
       : null;
 
+  // Internal links are built from real relationships — same destination,
+  // same category, shared themes — so each one is worth following.
+  const [overrides, relatedPackages, relatedDestinations, relatedGuides] = await Promise.all([
+    getSeoMeta("PACKAGE", pkg.id),
+    getRelatedPackages({
+      packageId: pkg.id,
+      destinationId: pkg.destinationId,
+      categoryId: pkg.categoryId,
+      tags: packageTags,
+      durationDays: pkg.durationDays,
+      price,
+      limit: 3,
+    }),
+    getRelatedDestinations({
+      destinationId: pkg.destinationId,
+      country: pkg.destination.country,
+      limit: 4,
+    }),
+    getRelatedBlogs({
+      destinationId: pkg.destinationId,
+      packageId: pkg.id,
+      categoryId: pkg.categoryId,
+      tags: packageTags,
+      limit: 3,
+    }),
+  ]);
+
   return (
     <div className="container-page py-10">
+      {/* Structured data describes only what is actually on this page. */}
       <JsonLd
-        data={breadcrumbLd([
-          { name: "Home", url: siteUrl },
-          { name: "Packages", url: `${siteUrl}/packages` },
-          { name: pkg.name, url: `${siteUrl}/packages/${pkg.slug}` },
-        ])}
-      />
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "Product",
-          name: pkg.name,
-          description: pkg.shortDescription,
-          image: pkg.images.map((i) => i.url),
-          offers: {
-            "@type": "Offer",
+        data={[
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Packages", path: "/packages" },
+            { name: pkg.name, path: `/packages/${pkg.slug}` },
+          ]),
+          touristTripSchema({
+            name: pkg.name,
+            description: pkg.shortDescription,
+            path: `/packages/${pkg.slug}`,
+            images: pkg.images.map((i) => i.url),
             price,
-            priceCurrency: pkg.currency,
-            availability: "https://schema.org/InStock",
-          },
-        }}
+            currency: pkg.currency,
+            durationDays: pkg.durationDays,
+            destination: pkg.destination
+              ? { name: pkg.destination.name, country: pkg.destination.country }
+              : null,
+            reviewCount: pkg.reviews.length,
+            ratingValue: avgRating,
+            inStock: pkg.bookingEnabled,
+          }),
+          ...(pkg.faqs.length > 0 ? [faqSchema(pkg.faqs)!] : []),
+          ...extraSchema(overrides?.schemaJson),
+        ]}
       />
-      {pkg.faqs.length > 0 && <JsonLd data={faqLd(pkg.faqs)} />}
 
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm text-slate-500">
@@ -261,6 +308,22 @@ export default async function PackageDetail({ params }: Params) {
           </div>
         </aside>
       </div>
+
+      <RelatedPackages
+        packages={relatedPackages}
+        title="Similar packages"
+        subtitle={`More trips like ${pkg.name}`}
+      />
+      <RelatedDestinations
+        destinations={relatedDestinations}
+        title="Explore more destinations"
+        subtitle={`Other places travellers pair with ${pkg.destination.name}`}
+      />
+      <RelatedBlogs
+        posts={relatedGuides}
+        title="Travel guides"
+        subtitle="Worth reading before you book"
+      />
     </div>
   );
 }

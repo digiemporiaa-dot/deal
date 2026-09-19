@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/admin/ui";
 import { RedirectManager } from "@/components/admin/RedirectManager";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function RedirectsPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("redirects:view");
+
   const rows = await prisma.redirect.findMany({ orderBy: { createdAt: "desc" } });
   return (
     <div>
@@ -17,7 +22,7 @@ export default async function RedirectsPage() {
           id: r.id,
           source: r.source,
           target: r.target,
-          permanent: r.permanent,
+          statusCode: r.statusCode,
           isActive: r.isActive,
           hits: r.hits,
           note: r.note,

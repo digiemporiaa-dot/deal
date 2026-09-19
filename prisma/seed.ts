@@ -45,11 +45,14 @@ async function main() {
   await prisma.blogCategory.deleteMany();
   await prisma.page.deleteMany();
   await prisma.media.deleteMany();
+  await prisma.seoMeta.deleteMany();
+  await prisma.activityLog.deleteMany();
 
   // ── Admin + team users ─────────────────────────────────────
   const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@vacationdeal.test";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || "Admin@12345";
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  // Same work factor the application uses for new passwords.
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
@@ -63,9 +66,15 @@ async function main() {
     },
   });
 
+  // One account per role, so every permission path can be tried out.
   const team: Array<[string, string, UserRole]> = [
     ["Priya Content", "content@vacationdeal.test", "CONTENT_MANAGER"],
     ["Rahul Bookings", "bookings@vacationdeal.test", "BOOKING_MANAGER"],
+    ["Meera Manager", "manager@vacationdeal.test", "MANAGER"],
+    ["Sanjay Sales", "sales@vacationdeal.test", "SALES"],
+    ["Ayesha Agent", "agent@vacationdeal.test", "AGENT"],
+    ["Vikram Editor", "editor@vacationdeal.test", "EDITOR"],
+    ["Neha Viewer", "viewer@vacationdeal.test", "VIEWER"],
   ];
   for (const [name, email, role] of team) {
     await prisma.user.upsert({
@@ -386,10 +395,11 @@ async function main() {
 
   // ── Leads ──────────────────────────────────────────────────
   const leadSeed = [
-    { name: "Deepak Nair", phone: "9811100011", destination: "Maldives", status: "NEW" as const, message: "Looking for a 5-day Maldives honeymoon in December." },
-    { name: "Fatima Sheikh", phone: "9811100022", destination: "Dubai", status: "CONTACTED" as const, message: "Family of 4, budget around 3L." },
-    { name: "Gaurav Malhotra", phone: "9811100033", destination: "Switzerland", status: "FOLLOW_UP" as const, message: "Need a premium Swiss + Paris combo." },
-    { name: "Isha Verma", phone: "9811100044", destination: "Bali", status: "QUALIFIED" as const, message: "Honeymoon, first week of Jan." },
+    { name: "Deepak Nair", phone: "9811100011", destination: "Maldives", status: "NEW" as const, message: "Looking for a 5-day Maldives honeymoon in December.", source: "GOOGLE_ADS", medium: "cpc", campaign: "maldives-honeymoon", priority: "HIGH" },
+    { name: "Fatima Sheikh", phone: "9811100022", destination: "Dubai", status: "CONTACTED" as const, message: "Family of 4, budget around 3L.", source: "META_ADS", medium: "paid_social", campaign: "dubai-family", priority: "NORMAL" },
+    { name: "Gaurav Malhotra", phone: "9811100033", destination: "Switzerland", status: "FOLLOW_UP" as const, message: "Need a premium Swiss + Paris combo.", source: "ORGANIC", medium: "organic", campaign: null, priority: "URGENT" },
+    { name: "Isha Verma", phone: "9811100044", destination: "Bali", status: "QUALIFIED" as const, message: "Honeymoon, first week of Jan.", source: "WHATSAPP", medium: null, campaign: null, priority: "NORMAL" },
+    { name: "Karan Mehta", phone: "9811100055", destination: "Bali", status: "PROPOSAL_SENT" as const, message: "Quote sent for a 7-night Bali trip.", source: "REFERRAL", medium: "referral", campaign: null, priority: "HIGH" },
   ];
   for (const l of leadSeed) {
     const lead = await prisma.lead.create({
@@ -400,9 +410,16 @@ async function main() {
         destination: l.destination,
         message: l.message,
         status: l.status,
-        source: "website",
+        // Seeded attribution, so the dashboard's source charts have something
+        // to show on a fresh install.
+        source: l.source,
+        medium: l.medium,
+        campaign: l.campaign,
+        priority: l.priority,
         travellers: 2,
+        adults: 2,
         budget: "₹1L – ₹3L",
+        lastActivityAt: new Date(),
       },
     });
     if (l.status !== "NEW") {

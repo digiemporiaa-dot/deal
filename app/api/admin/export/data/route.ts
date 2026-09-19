@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { requirePermission, ipFromRequest } from "@/lib/guard";
+import { recordActivity } from "@/lib/activity";
+import { toSafeError } from "@/lib/errors";
+import { limitFor } from "@/lib/rate-limit";
 import { toCsv, toExcel, exportFileName, EXPORT_CONTENT_TYPE } from "@/lib/export";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const ADMIN_ONLY = ["SUPER_ADMIN", "ADMIN"];
 
 function fmtDate(d: Date | null): string {
   return d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
@@ -21,10 +22,20 @@ function fmtDate(d: Date | null): string {
  * Passwords and payment credentials are never included.
  */
 export async function GET(request: Request) {
-  const session = await auth();
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  if (!session?.user || !role || !ADMIN_ONLY.includes(role)) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  let actor;
+  try {
+    actor = await requirePermission("export:data");
+  } catch (error) {
+    const safe = toSafeError(error, "api.export.data", { ip: ipFromRequest(request) });
+    return NextResponse.json({ error: safe.message }, { status: safe.status });
+  }
+
+  const throttle = limitFor("adminExport", actor.id);
+  if (!throttle.ok) {
+    return NextResponse.json(
+      { error: "Too many exports. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(throttle.retryAfter) } },
+    );
   }
 
   const url = new URL(request.url);
@@ -50,7 +61,7 @@ export async function GET(request: Request) {
 
     const payload = {
       exportedAt: new Date().toISOString(),
-      exportedBy: session.user.email ?? session.user.name ?? "admin",
+      exportedBy: actor.email || actor.name || "admin",
       note: "Vacation Deal data backup. Keep this file private — it contains customer information.",
       counts: {
         packages: packages.length,
@@ -67,6 +78,14 @@ export async function GET(request: Request) {
       },
       data: { packages, destinations, pages, blogPosts, bookings, customers, leads, testimonials, coupons, documents, redirects },
     };
+
+    await recordActivity({
+      actor,
+      action: "EXPORT",
+      entity: "Export",
+      description: "Downloaded a full data backup",
+      metadata: payload.counts,
+    });
 
     return new NextResponse(JSON.stringify(payload, null, 2), {
       headers: {
@@ -145,6 +164,14 @@ export async function GET(request: Request) {
   } else {
     return NextResponse.json({ error: "Unknown export type" }, { status: 400 });
   }
+
+  await recordActivity({
+    actor,
+    action: "EXPORT",
+    entity: "Export",
+    description: `Exported ${title.toLowerCase()} as ${format.toUpperCase()}`,
+    metadata: { type, format, rows: rows.length },
+  });
 
   const body = format === "excel" ? toExcel(title, headers, rows) : toCsv(headers, rows);
   return new NextResponse(body, {

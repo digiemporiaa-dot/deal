@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { requirePermission, ipFromRequest } from "@/lib/guard";
+import { recordActivity } from "@/lib/activity";
+import { toSafeError } from "@/lib/errors";
+import { limitFor } from "@/lib/rate-limit";
 import { toCsv, toExcel, exportFileName, EXPORT_CONTENT_TYPE } from "@/lib/export";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-
-const ADMIN_ONLY = ["SUPER_ADMIN", "ADMIN"];
 
 function fmtDate(d: Date | null): string {
   return d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
@@ -23,10 +24,20 @@ function fmtDateTime(d: Date | null): string {
  * /api/admin/export/leads?format=csv&from=2026-01-01&to=2026-01-31&status=NEW&owner=<userId>
  */
 export async function GET(request: Request) {
-  const session = await auth();
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  if (!session?.user || !role || !ADMIN_ONLY.includes(role)) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  let actor;
+  try {
+    actor = await requirePermission("export:data");
+  } catch (error) {
+    const safe = toSafeError(error, "api.export.leads", { ip: ipFromRequest(request) });
+    return NextResponse.json({ error: safe.message }, { status: safe.status });
+  }
+
+  const throttle = limitFor("adminExport", actor.id);
+  if (!throttle.ok) {
+    return NextResponse.json(
+      { error: "Too many exports. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(throttle.retryAfter) } },
+    );
   }
 
   const url = new URL(request.url);
@@ -100,6 +111,14 @@ export async function GET(request: Request) {
     l.source,
     (l.message ?? "").replace(/\s+/g, " ").slice(0, 500),
   ]);
+
+  await recordActivity({
+    actor,
+    action: "EXPORT",
+    entity: "Export",
+    description: `Exported ${leads.length} lead(s) as ${format.toUpperCase()}`,
+    metadata: { format, from, to, status, owner, rows: leads.length },
+  });
 
   const body = format === "excel" ? toExcel("Leads", headers, rows) : toCsv(headers, rows);
   const fileName = exportFileName(`leads${from ? `-${from}` : ""}${to ? `-to-${to}` : ""}`, format);

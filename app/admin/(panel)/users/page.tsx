@@ -2,10 +2,15 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/ui";
 import { UserManager } from "@/components/admin/UserManager";
+import { requirePermission } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
+  // Defence in depth: the middleware checks the section, and the page
+  // checks the permission itself.
+  await requirePermission("users:view");
+
   const session = await auth();
   const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
   const role = session?.user?.role;

@@ -1,12 +1,25 @@
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/seo";
 import { getPublishedDestinations } from "@/lib/services/catalog";
 import { DestinationCard } from "@/components/site/DestinationCard";
 import { SectionHeading } from "@/components/site/Section";
 
-export const metadata: Metadata = {
-  title: "Destinations",
-  description: "Browse our handpicked travel destinations around the world.",
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ country?: string; featured?: string }>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  // Country and "featured" views are slices of the same list — one canonical.
+  const filtered = Boolean(sp.country || sp.featured);
+
+  return buildMetadata({
+    path: "/destinations",
+    title: "Destinations",
+    description: "Browse our handpicked travel destinations around the world.",
+    noIndex: filtered,
+  });
+}
 
 export default async function DestinationsPage({
   searchParams,

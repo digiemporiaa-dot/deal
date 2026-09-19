@@ -1,13 +1,33 @@
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/seo";
 import { getPackages, getPackageCategories, getPublishedDestinations } from "@/lib/services/catalog";
 import { PackageCard } from "@/components/site/PackageCard";
 import { SectionHeading } from "@/components/site/Section";
 import { PackageFiltersBar } from "@/components/site/PackageFiltersBar";
 
-export const metadata: Metadata = {
-  title: "Holiday Packages",
-  description: "Browse and book handcrafted holiday packages with the best prices.",
-};
+/**
+ * Filtered, sorted and searched variants of this listing are the classic
+ * source of duplicate content: they all show slices of the same catalogue.
+ * They stay crawlable for discovery but are marked noindex, and every one of
+ * them canonicalises to the clean /packages URL.
+ */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const filtered = ["q", "destination", "category", "minPrice", "maxPrice", "duration", "sort", "page"].some(
+    (key) => Boolean(sp[key]),
+  );
+
+  return buildMetadata({
+    path: "/packages",
+    title: "Holiday Packages",
+    description: "Browse and book handcrafted holiday packages with the best prices.",
+    noIndex: filtered,
+  });
+}
 
 export default async function PackagesPage({
   searchParams,

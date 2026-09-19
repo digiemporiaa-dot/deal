@@ -13,18 +13,48 @@ A production-ready, full-stack travel agency website with a public booking front
 - Reusable enquiry popup (Enquire Now / Get Quote / Plan My Trip / Request Callback)
 - Floating & contextual WhatsApp CTAs (number from settings, never hard-coded)
 - Blog, CMS pages, testimonials
-- Full SEO: dynamic metadata, canonical URLs, Open Graph, JSON-LD (Product, TouristDestination, Article, FAQ, Breadcrumb), `sitemap.xml`, `robots.txt`
+- **Internal linking engine** — related packages, destinations and travel guides built from real relationships (same destination, category, themes, comparable price and length), never random filler
+- Full SEO: per-record overrides (canonical, robots, OG, X/Twitter, focus keyword, custom JSON-LD), JSON-LD (TravelAgency, WebSite, TouristTrip, TouristDestination, Article, FAQPage, BreadcrumbList), noindex-aware `sitemap.xml`, `robots.txt`, and a working **redirect manager** that keeps indexed URLs alive when a slug changes
 
 **Admin panel** (`/admin`)
-- Secure credentials login, role-based access, middleware-protected routes
-- Dashboard with KPIs and recent activity
+- Secure credentials login, **permission-based access control** (see Roles below), enforced in the middleware *and* independently in every page, Server Action and API route
+- **Business dashboard** — revenue (gross / paid / pending / refunded), leads, bookings, conversion rate, average booking value, upcoming trips, with a date filter (today → custom range) and trend, funnel, source, top-package and top-destination charts
+- **CRM** — pipeline statuses, priorities, assignment, activity timeline, follow-up scheduling with overdue/today/upcoming views, search and filters on every field, bulk status change and bulk assignment, marketing attribution (UTM, gclid/fbclid, landing page, referrer) captured server-side
+- **Activity log** (`/admin/activity-log`) — every sign-in and every change, searchable and filterable by user, action, area and date
 - **Packages CRUD** with dynamic, unlimited repeaters (itinerary, highlights, inclusions, exclusions, hotels, activities, FAQs, gallery) organised into tabs
-- Destinations CRUD, Leads (status + notes), Bookings (status), Customers, Testimonials, Blog CMS (rich-text), Coupons, Media library (upload), Settings, Team
+- **Media library** — folders, search, pagination, alt/title/caption editing, missing-alt warnings, and a storage abstraction (local / Vercel Blob / any S3-compatible bucket)
+- **SEO panel** on every content type — search preview, social cards, index/follow controls and custom JSON-LD
+- Destinations CRUD, Leads, Bookings, Customers, Testimonials, Blog CMS (rich-text), Coupons, Redirects, Quotations & Invoices, Settings, Team
 
 **Engineering**
-- Zod validation on client + server, Prisma transactions for bookings/payments
-- Rate limiting, secure webhook verification, no secrets in client code
+- Zod validation on client + server — including query and route parameters, so a hand-edited URL cannot widen a database query
+- Prisma transactions for bookings/payments, with idempotent payment verification and webhooks (a replayed callback is a no-op)
+- Allow-list HTML sanitisation of all rich-text before it is stored
+- Uploads validated from their magic bytes, never their name or Content-Type
+- Named rate limits on login, enquiries, bookings, pricing, payments, uploads and exports
+- Structured JSON logging with automatic secret redaction; user-facing errors never expose internals
 - Graceful fallbacks when SMTP / Razorpay aren't configured (nothing breaks)
+
+---
+
+## 👥 Roles
+
+Defined in `lib/permissions.ts`, which is the single source of truth for the sidebar, the middleware and every server-side check.
+
+| Role | Scope |
+|------|-------|
+| `SUPER_ADMIN` | Everything. Only a Super Admin can create or change another Super Admin. |
+| `ADMIN` | Everything except promoting someone to Super Admin. |
+| `MANAGER` | Leads, bookings, customers, documents, catalogue, reports, activity log. |
+| `BOOKING_MANAGER` | Sales desk: bookings, leads, customers, documents, coupons, reports. |
+| `CONTENT_MANAGER` | Website content: packages, destinations, blogs, pages, media, SEO, redirects. |
+| `SALES` | Leads, customers, bookings, quotations. |
+| `SALES_EXECUTIVE` | Bookings and documents, plus **only the leads assigned to them**. |
+| `EDITOR` | Edits existing content. Cannot create, delete or publish. |
+| `AGENT` | **Only the leads and bookings assigned to them.** |
+| `VIEWER` | Read-only. |
+
+Hiding a menu item is never the security boundary: `requirePermission()` in `lib/guard.ts` is, and it re-reads the session on every call.
 
 ---
 
@@ -46,7 +76,18 @@ A production-ready, full-stack travel agency website with a public booking front
 
 ## 🗄️ Database models
 
-`User`, `Account`, `Session`, `VerificationToken`, `Destination`, `DestinationImage`, `PackageCategory`, `TravelPackage`, `PackageImage`, `ItineraryDay`, `PackageInclusion`, `PackageExclusion`, `PackageHotel`, `PackageActivity`, `Faq`, `Customer`, `Booking`, `Payment`, `Lead`, `LeadNote`, `BlogCategory`, `BlogPost`, `Testimonial`, `Coupon`, `Media`, `Page`, `SiteSetting`.
+`User`, `Account`, `Session`, `VerificationToken`, `Destination`, `DestinationImage`, `PackageCategory`, `TravelPackage`, `PackageImage`, `ItineraryDay`, `PackageInclusion`, `PackageExclusion`, `PackageHotel`, `PackageActivity`, `Faq`, `Customer`, `Booking`, `Payment`, `Lead`, `LeadNote`, `BlogCategory`, `BlogPost`, `Testimonial`, `Coupon`, `Media`, `Page`, `SiteSetting`, `SalesDocument`, `SalesDocumentItem`, `Redirect`, `ActivityLog`, `SeoMeta`.
+
+### Upgrading an existing database
+
+Schema changes are **additive only** — no table or column is ever dropped, and no existing row is rewritten. Take a backup, then run either:
+
+```bash
+npm run db:push      # Prisma applies the additive changes (the usual route)
+npm run db:upgrade   # or apply prisma/sql/2026-09-19-platform-upgrade.sql with psql
+```
+
+The SQL file is idempotent, so re-running it is a no-op. **Never** run `prisma migrate reset` against a database with real bookings in it.
 
 ---
 
@@ -99,6 +140,8 @@ npm run dev                 # http://localhost:3000
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript check |
 | `npm run test` | Vitest unit tests |
+| `npm run check` | Lint + typecheck + tests in one go |
+| `npm run db:upgrade` | Apply the additive upgrade SQL with `psql` |
 | `npm run prisma:migrate` | Create/apply a dev migration |
 | `npm run prisma:deploy` | Apply migrations in production |
 | `npm run db:push` | Push schema without a migration |
@@ -132,14 +175,24 @@ Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `ADMIN
 3. Use a managed Postgres (Neon/Supabase/Vercel Postgres) for `DATABASE_URL`.
 4. Build command `npm run build`; the Prisma client is generated automatically.
 5. Run `npm run prisma:deploy` against the production DB (e.g. as a release step), then `npm run db:seed` once if you want demo data.
-6. For media uploads in production, set `BLOB_READ_WRITE_TOKEN` (Vercel Blob) — local `/public/uploads` is for development only.
+6. For media uploads in production, set `STORAGE_DRIVER` to `vercel-blob` (with `BLOB_READ_WRITE_TOKEN`) or `s3` (with the `S3_*` variables) — local `/public/uploads` is wiped on every deploy and is for development only.
+7. Set `CRON_SECRET`; `/api/cron/crm` refuses to run in production without it. The schedule is already declared in `vercel.json`.
 
 **Any Node host**: `npm run build` then `npm run start` behind a reverse proxy, with `DATABASE_URL` reachable.
 
 ---
 
 ## 🔐 Security notes
-- Passwords hashed with bcrypt; admin routes protected by middleware + per-action role checks.
-- All inputs validated with Zod on the server; Prisma prevents SQL injection.
-- Razorpay signature + webhook verification, basic rate limiting on public endpoints.
+
+- **Authorization is server-side and independent.** The middleware guards the section, the page guards itself, and every Server Action and route handler calls `requirePermission()` before it touches data. Invoking a Server Action directly gets you nothing your role does not already have.
+- **Ownership is re-read, never trusted.** A role restricted to its own pipeline has the owner filter applied after every user-supplied filter, so a hand-edited query string cannot widen the result set.
+- **Nothing financial comes from the browser.** Prices, discounts, coupons, totals and payment status are all derived server-side from database rows.
+- **Payments are idempotent.** A replayed verification callback or a retried webhook is acknowledged without re-running the state change or resending emails, and a failure event can never overwrite a payment that already succeeded.
+- **Rich text is sanitised** with an allow-list before it is stored, so a lower-privilege editor cannot plant script in a public page.
+- **Uploads are identified by their magic bytes.** Filenames are generated, extensions come from the detected format, and the path is confined to the upload root — executables, PHP, HTML and script-carrying SVGs are all refused.
+- Passwords are hashed with bcrypt (cost 12). Login is throttled per IP *and* per account, and failures are indistinguishable from an unknown email, so the form cannot be used to enumerate accounts.
+- Disabling an account takes effect on the next request: the admin shell re-reads the user from the database rather than trusting the role in the JWT.
+- All inputs validated with Zod on the server; Prisma parameterises every query.
+- Security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS, `frame-ancestors`) plus `X-Robots-Tag: noindex` on `/admin`, `/api`, `/my-trips` and `/booking`.
+- Structured logs redact passwords, tokens and signatures automatically; user-facing errors never carry stack traces, SQL or file paths.
 - Settings, WhatsApp number, tax, currency and analytics IDs are all configurable from the admin panel — nothing is hard-coded.

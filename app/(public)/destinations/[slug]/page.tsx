@@ -9,26 +9,38 @@ import { Faqs } from "@/components/site/Faqs";
 import { SectionHeading } from "@/components/site/Section";
 import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { WhatsAppLink } from "@/components/site/WhatsAppLink";
-import { JsonLd, breadcrumbLd, faqLd } from "@/components/seo/JsonLd";
+import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  buildMetadata,
+  getSeoMeta,
+  breadcrumbSchema,
+  faqSchema,
+  touristDestinationSchema,
+  extraSchema,
+} from "@/lib/seo";
 import { destinationEnquiryMessage } from "@/lib/whatsapp";
 import { parseList } from "@/lib/utils";
+import { getRelatedDestinations, getRelatedBlogs } from "@/lib/related";
+import { RelatedDestinations, RelatedBlogs } from "@/components/site/RelatedContent";
 
 type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const dest = await getDestinationBySlug(slug);
-  if (!dest) return { title: "Destination not found" };
-  return {
-    title: dest.seoTitle || dest.name,
-    description: dest.seoDescription || dest.shortDescription,
-    alternates: { canonical: `/destinations/${dest.slug}` },
-    openGraph: {
+  if (!dest) return { title: "Destination not found", robots: { index: false, follow: false } };
+
+  const overrides = await getSeoMeta("DESTINATION", dest.id);
+  return buildMetadata(
+    {
+      path: `/destinations/${dest.slug}`,
       title: dest.seoTitle || dest.name,
       description: dest.seoDescription || dest.shortDescription,
-      images: dest.coverImage ? [dest.coverImage] : undefined,
+      image: dest.coverImage,
+      updatedAt: dest.updatedAt,
     },
-  };
+    overrides,
+  );
 }
 
 export default async function DestinationDetail({ params }: Params) {
@@ -37,28 +49,34 @@ export default async function DestinationDetail({ params }: Params) {
   if (!dest) notFound();
 
   const highlights = parseList(dest.highlights);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const [overrides, relatedDestinations, guides] = await Promise.all([
+    getSeoMeta("DESTINATION", dest.id),
+    getRelatedDestinations({ destinationId: dest.id, country: dest.country, limit: 4 }),
+    getRelatedBlogs({ destinationId: dest.id, limit: 3 }),
+  ]);
 
   return (
     <div>
       <JsonLd
-        data={breadcrumbLd([
-          { name: "Home", url: siteUrl },
-          { name: "Destinations", url: `${siteUrl}/destinations` },
-          { name: dest.name, url: `${siteUrl}/destinations/${dest.slug}` },
-        ])}
+        data={[
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Destinations", path: "/destinations" },
+            { name: dest.name, path: `/destinations/${dest.slug}` },
+          ]),
+          touristDestinationSchema({
+            name: dest.name,
+            description: dest.shortDescription,
+            path: `/destinations/${dest.slug}`,
+            image: dest.coverImage,
+            country: dest.country,
+            state: dest.state,
+            city: dest.city,
+          }),
+          ...(dest.faqs.length > 0 ? [faqSchema(dest.faqs)!] : []),
+          ...extraSchema(overrides?.schemaJson),
+        ]}
       />
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "TouristDestination",
-          name: dest.name,
-          description: dest.shortDescription,
-          image: dest.coverImage,
-          address: { "@type": "PostalAddress", addressCountry: dest.country },
-        }}
-      />
-      {dest.faqs.length > 0 && <JsonLd data={faqLd(dest.faqs)} />}
 
       {/* Hero */}
       <section className="relative isolate overflow-hidden">
@@ -146,6 +164,19 @@ export default async function DestinationDetail({ params }: Params) {
           <Faqs items={dest.faqs} />
         </section>
       )}
+
+      <div className="container-page pb-16">
+        <RelatedBlogs
+          posts={guides}
+          title={`${dest.name} travel guides`}
+          subtitle="Tips and itineraries from our team"
+        />
+        <RelatedDestinations
+          destinations={relatedDestinations}
+          title="Related destinations"
+          subtitle={`Other places to explore in ${dest.country} and beyond`}
+        />
+      </div>
     </div>
   );
 }
