@@ -54,6 +54,12 @@ model User {
   activityLogs  ActivityLog[]
   uploads       Media[]         @relation("MediaUploader")
 
+  pagesCreated     Page[]            @relation("PageAuthor")
+  pagesUpdated     Page[]            @relation("PageEditor")
+  pageRevisions    PageRevision[]    @relation("RevisionAuthor")
+  reusableSections ReusableSection[] @relation("ReusableSectionAuthor")
+  pageTemplates    PageTemplate[]    @relation("PageTemplateAuthor")
+
   @@index([role])
   @@index([isActive])
   @@index([email])
@@ -585,20 +591,115 @@ model Media {
 // ─────────────────────────────────────────────────────────────
 
 model Page {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   title          String
-  slug           String   @unique
+  slug           String  @unique
+  // Legacy rendering path, kept so pages built before the page builder keep
+  // working. A page with builder content ignores these two columns.
   content        String
-  status         String   @default("PUBLISHED")
+  sections       String?
+  status         String  @default("PUBLISHED")
   seoTitle       String?
   seoDescription String?
   ogImage        String?
-  sections       String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  faqs           Faq[]
+
+  // ── Page builder ──
+  // The draft is what the builder edits; the published copy is what visitors
+  // see. Publishing copies one into the other, so editing a page never
+  // changes the live version until it is published.
+  draftContent     Json?
+  publishedContent Json?
+  /// Page template this page started from, e.g. "homepage" or "landing".
+  template         String?
+  publishedAt      DateTime?
+  createdById      String?
+  updatedById      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  faqs      Faq[]
+  revisions PageRevision[]
+  createdBy User?          @relation("PageAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?          @relation("PageEditor", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([status])
+  @@index([updatedAt])
+  @@index([template])
+  @@index([createdById])
+  @@index([updatedById])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Page builder — revisions, reusable sections and templates
+// ─────────────────────────────────────────────────────────────
+
+/// A snapshot of a page's builder content. Written on publish and on manual
+/// save, so an editor can look at what a page used to be and put it back.
+/// Never written per keystroke.
+model PageRevision {
+  id          String   @id @default(cuid())
+  pageId      String
+  version     Int
+  content     Json
+  /// "autosave" | "manual" | "publish" | "restore"
+  reason      String   @default("manual")
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  page      Page  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("RevisionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([pageId, version])
+  @@index([pageId, createdAt])
+  @@index([createdById])
+}
+
+/// A section saved once and used on many pages. A page referencing one stores
+/// only its id, so editing the shared section updates every page using it.
+model ReusableSection {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  content     Json
+  status      String   @default("PUBLISHED")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  createdBy User? @relation("ReusableSectionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([updatedAt])
+  @@index([createdById])
+}
+
+/// A starting point: either a whole page layout or a single section, saved to
+/// the template library and inserted into other pages.
+model PageTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  /// "page" | "section"
+  kind        String   @default("section")
+  /// Groups templates in the picker, e.g. "Hero", "Travel".
+  category    String   @default("General")
+  content     Json
+  /// Shipped with the product and not deletable from the UI.
+  isBuiltIn   Boolean  @default(false)
+  thumbnail   String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  createdBy User? @relation("PageTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([kind])
+  @@index([category])
+  @@index([createdById])
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { can } from "@/lib/guard";
 import { resolveRedirect } from "@/lib/redirects";
 import { buildMetadata, getSeoMeta, breadcrumbSchema, faqSchema, extraSchema } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Faqs } from "@/components/site/Faqs";
 import { PreviewBanner } from "@/components/site/PreviewBanner";
+import { RenderDocument, hasBuilderContent } from "@/components/builder/RenderDocument";
+import { CMS_ROUTES } from "@/lib/builder/routes";
+import { getSettings } from "@/lib/settings";
 
 /**
  * Generic CMS page renderer (e.g. /about, /terms, /privacy). Matches a Page
@@ -47,9 +50,14 @@ export default async function CmsPage({ params, searchParams }: Params) {
   const { slug } = await params;
   const sp = await searchParams;
 
-  // Draft preview is only for signed-in admin users.
-  const session = sp.preview === "1" ? await auth() : null;
-  const allowDraft = Boolean(session?.user);
+  // A page that backs a code route (the homepage, contact) is served there.
+  // Leaving it reachable at both addresses would put two URLs with identical
+  // content into the index, competing for the same search result.
+  if (CMS_ROUTES[slug]) permanentRedirect(CMS_ROUTES[slug]);
+
+  // Draft preview needs the permission, not merely a session: a signed-in
+  // customer must not be able to read unpublished copy by guessing the URL.
+  const allowDraft = sp.preview === "1" ? await can("pages:view") : false;
 
   const page = await getPage(slug, allowDraft);
 
@@ -78,6 +86,23 @@ export default async function CmsPage({ params, searchParams }: Params) {
     ...(isDraft ? [] : extraSchema(overrides?.schemaJson)),
   ];
 
+  // A page built with the page builder renders from its document. Previewing
+  // shows the draft; visitors always get the published copy, so editing never
+  // changes the live page until someone publishes it.
+  const builderContent = isDraft || sp.preview === "1" ? page.draftContent : page.publishedContent;
+
+  if (hasBuilderContent(builderContent)) {
+    const settings = await getSettings();
+    return (
+      <>
+        {isDraft && <PreviewBanner title={page.title} editHref={`/admin/pages/${page.id}/builder`} />}
+        {!isDraft && <JsonLd data={schema} />}
+        <RenderDocument content={builderContent} ctx={{ whatsappNumber: settings.whatsapp }} />
+      </>
+    );
+  }
+
+  // Pages written before the builder keep rendering exactly as they did.
   return (
     <>
       {isDraft && <PreviewBanner title={page.title} editHref={`/admin/pages/${page.id}`} />}

@@ -1,14 +1,34 @@
 import type { Metadata } from "next";
-import { buildMetadata } from "@/lib/seo";
+import { buildMetadata, getSeoMeta } from "@/lib/seo";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { getSettings } from "@/lib/settings";
+import { RenderDocument } from "@/components/builder/RenderDocument";
+import { cmsRoutePage } from "@/lib/builder/cms-route";
 import { SectionHeading } from "@/components/site/Section";
 import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { WhatsAppLink } from "@/components/site/WhatsAppLink";
 import { GENERAL_ENQUIRY_MESSAGE } from "@/lib/whatsapp";
 
+/** A published CMS page with this slug takes over /contact. */
+const CONTACT_SLUG = "contact";
+
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getSettings();
+  const [settings, cmsPage] = await Promise.all([getSettings(), cmsRoutePage(CONTACT_SLUG)]);
+
+  if (cmsPage) {
+    const overrides = await getSeoMeta("PAGE", cmsPage.id);
+    return buildMetadata(
+      {
+        path: "/contact",
+        title: cmsPage.seoTitle || cmsPage.title,
+        description: cmsPage.seoDescription,
+        image: cmsPage.ogImage,
+        updatedAt: cmsPage.updatedAt,
+      },
+      overrides,
+    );
+  }
+
   return buildMetadata({
     path: "/contact",
     title: "Contact Us",
@@ -19,7 +39,19 @@ export async function generateMetadata(): Promise<Metadata> {
 export const dynamic = "force-dynamic";
 
 export default async function ContactPage() {
-  const settings = await getSettings();
+  // Built in the CMS? That wins. The layout below stays as the fallback, so
+  // unpublishing the CMS page puts the original contact page back.
+  const [settings, cmsPage] = await Promise.all([getSettings(), cmsRoutePage(CONTACT_SLUG)]);
+
+  if (cmsPage) {
+    return (
+      <RenderDocument
+        content={cmsPage.publishedContent}
+        ctx={{ whatsappNumber: settings.whatsapp }}
+      />
+    );
+  }
+
   return (
     <div className="container-page py-14">
       <SectionHeading eyebrow="We're here to help" title="Contact Us" subtitle="Reach out and our travel experts will get back to you within a few hours." />

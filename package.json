@@ -15,9 +15,11 @@
     "prisma:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed-templates": "tsx prisma/seed-templates.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:upgrade": "psql \"$DATABASE_URL\" -f prisma/sql/2026-09-19-platform-upgrade.sql",
+    "db:upgrade:cms": "psql \"$DATABASE_URL\" -f prisma/sql/2026-09-19-page-builder.sql",
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "prisma": {
@@ -25,6 +27,9 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^2.4.3",

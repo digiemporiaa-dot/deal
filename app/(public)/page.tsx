@@ -30,6 +30,8 @@ import {
 import { getSettings } from "@/lib/settings";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { buildMetadata, getSeoMeta, organizationSchema, websiteSchema, extraSchema } from "@/lib/seo";
+import { RenderDocument } from "@/components/builder/RenderDocument";
+import { cmsRoutePage, HOMEPAGE_SLUG } from "@/lib/builder/cms-route";
 import { PackageCard } from "@/components/site/PackageCard";
 import { DestinationCard } from "@/components/site/DestinationCard";
 import { Testimonials } from "@/components/site/Testimonials";
@@ -40,8 +42,30 @@ import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The homepage is editable in the CMS: a published page with the reserved
+ * slug below takes over rendering. Its SEO panel is used when it exists,
+ * falling back to the site settings otherwise.
+ */
+const homeCmsPage = () => cmsRoutePage(HOMEPAGE_SLUG);
+
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getSettings();
+  const [settings, cmsPage] = await Promise.all([getSettings(), homeCmsPage()]);
+
+  if (cmsPage) {
+    const overrides = await getSeoMeta("PAGE", cmsPage.id);
+    return buildMetadata(
+      {
+        path: "/",
+        title: cmsPage.seoTitle || cmsPage.title,
+        description: cmsPage.seoDescription || settings.tagline,
+        image: cmsPage.ogImage || settings.logoUrl || null,
+        updatedAt: cmsPage.updatedAt,
+      },
+      overrides,
+    );
+  }
+
   // "HOME" is the reserved ROUTE key for the homepage's SEO overrides.
   const overrides = await getSeoMeta("ROUTE", "HOME");
   return buildMetadata(
@@ -78,6 +102,24 @@ function categoryIcon(name: string) {
 }
 
 export default async function HomePage() {
+  // When the homepage has been built in the CMS, that is what visitors get —
+  // the hardcoded layout below stays as the fallback until then, so the site
+  // is never blank during the migration.
+  const [cmsPage, cmsSettings] = await Promise.all([homeCmsPage(), getSettings()]);
+
+  if (cmsPage) {
+    const [organization, website] = await Promise.all([organizationSchema(), websiteSchema()]);
+    return (
+      <>
+        <JsonLd data={[organization, website]} />
+        <RenderDocument
+          content={cmsPage.publishedContent}
+          ctx={{ whatsappNumber: cmsSettings.whatsapp }}
+        />
+      </>
+    );
+  }
+
   const [packages, destinations, testimonials, posts, categories, settings, organization, website, overrides] =
     await Promise.all([
       getFeaturedPackages(6),
