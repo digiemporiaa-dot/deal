@@ -98,14 +98,14 @@ export function DocumentActions({
           type="button"
           onClick={remove}
           disabled={busy !== null}
-          className="ml-auto inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+          className="ml-auto inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong px-3 text-sm font-medium text-admin-text-muted hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" /> Delete
         </button>
       </div>
 
-      <p className="text-xs text-slate-500">
-        Current status: <span className="font-semibold text-slate-700">{status}</span>
+      <p className="text-xs text-admin-text-muted">
+        Current status: <span className="font-semibold text-admin-text">{status}</span>
         {isInvoice && balance > 0 && <> · Balance due ₹{balance.toLocaleString("en-IN")}</>}
       </p>
 

@@ -49,7 +49,7 @@ export function SettingsForm({ initial }: { initial: SiteSettings }) {
       </Group>
 
       <Group title="Menu & footer links">
-        <p className="text-sm text-slate-500">Control which links appear in the website header menu and footer columns. Use paths like <code className="rounded bg-slate-100 px-1">/about</code> or <code className="rounded bg-slate-100 px-1">/packages</code>.</p>
+        <p className="text-sm text-admin-text-muted">Control which links appear in the website header menu and footer columns. Use paths like <code className="rounded bg-admin-muted px-1">/about</code> or <code className="rounded bg-admin-muted px-1">/packages</code>.</p>
         <LinkListEditor title="Header menu links" name="navigation.headerLinks" control={control} register={register} />
         <Field label="Footer column 1 title"><Input {...register("navigation.footerExploreTitle")} /></Field>
         <LinkListEditor title="Footer column 1 links" name="navigation.footerExploreLinks" control={control} register={register} />
@@ -88,13 +88,13 @@ function LinkListEditor({
 }) {
   const { fields, append, remove } = useFieldArray({ control, name });
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
+    <div className="rounded-xl border border-admin p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-sm font-semibold text-admin-text">{title}</h3>
         <button
           type="button"
           onClick={() => append({ label: "", href: "" })}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center gap-1 rounded-md border border-admin-border-strong px-2 py-1 text-xs font-medium text-admin-text hover:bg-admin-bg"
         >
           <Plus className="h-3.5 w-3.5" /> Add link
         </button>
@@ -108,13 +108,13 @@ function LinkListEditor({
               type="button"
               onClick={() => remove(index)}
               aria-label="Remove link"
-              className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+              className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
             >
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
         ))}
-        {fields.length === 0 && <p className="text-sm text-slate-400">No links — click &ldquo;Add link&rdquo;.</p>}
+        {fields.length === 0 && <p className="text-sm text-admin-text-subtle">No links — click &ldquo;Add link&rdquo;.</p>}
       </div>
     </div>
   );
@@ -122,8 +122,8 @@ function LinkListEditor({
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6">
-      <h2 className="mb-4 font-semibold text-slate-900">{title}</h2>
+    <div className="rounded-2xl border border-admin bg-white p-6">
+      <h2 className="mb-4 font-semibold text-admin-text">{title}</h2>
       <div className="space-y-4">{children}</div>
     </div>
   );

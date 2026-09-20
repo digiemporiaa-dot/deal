@@ -42,7 +42,7 @@ export function LeadPrioritySelect({ leadId, value }: { leadId: string; value: s
         }
         setPending(false);
       }}
-      className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-60"
+      className="h-10 w-full rounded-lg border border-admin-border-strong px-3 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-60"
     >
       {LEAD_PRIORITIES.map((priority) => (
         <option key={priority} value={priority}>

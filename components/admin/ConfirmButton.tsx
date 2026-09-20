@@ -90,7 +90,7 @@ export function ConfirmButton({
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-title"
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 p-4"
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-admin-navy/50 p-4"
             onClick={() => !pending && setOpen(false)}
           >
             <div
@@ -107,10 +107,10 @@ export function ConfirmButton({
                   <AlertTriangle className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <h2 id="confirm-title" className="font-semibold text-slate-900">
+                  <h2 id="confirm-title" className="font-semibold text-admin-text">
                     {title}
                   </h2>
-                  {description && <p className="mt-1 text-sm text-slate-600">{description}</p>}
+                  {description && <p className="mt-1 text-sm text-admin-text-muted">{description}</p>}
                 </div>
               </div>
 
@@ -120,7 +120,7 @@ export function ConfirmButton({
                   type="button"
                   onClick={() => setOpen(false)}
                   disabled={pending}
-                  className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="inline-flex h-10 items-center rounded-lg border border-admin-border-strong bg-white px-4 text-sm font-semibold text-admin-text hover:bg-admin-bg disabled:opacity-50"
                 >
                   {cancelLabel}
                 </button>

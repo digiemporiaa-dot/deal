@@ -109,7 +109,7 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
         <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Customer</h2>
+          <h2 className="mb-4 font-semibold text-admin-text">Customer</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label>Name *</Label>
@@ -136,11 +136,11 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
 
         <Card className="p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Line items</h2>
+            <h2 className="font-semibold text-admin-text">Line items</h2>
             <button
               type="button"
               onClick={() => set("items", [...v.items, { title: "", description: "", quantity: 1, unitPrice: 0 }])}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium hover:bg-slate-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-admin-border-strong px-3 text-sm font-medium hover:bg-admin-bg"
             >
               <Plus className="h-4 w-4" /> Add item
             </button>
@@ -148,9 +148,9 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
 
           <div className="space-y-3">
             {v.items.map((item, i) => (
-              <div key={i} className="rounded-xl border border-slate-200 p-3">
+              <div key={i} className="rounded-xl border border-admin p-3">
                 <div className="flex items-start gap-2">
-                  <span className="mt-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                  <span className="mt-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-admin-muted text-xs font-semibold text-admin-text-muted">
                     {i + 1}
                   </span>
                   <div className="min-w-0 flex-1 space-y-2">
@@ -173,7 +173,7 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
                           onChange={(e) => setItem(i, { quantity: Number(e.target.value) })}
                         />
                       </div>
-                      <span className="text-slate-400">×</span>
+                      <span className="text-admin-text-subtle">×</span>
                       <div className="w-36">
                         <Input
                           type="number"
@@ -182,19 +182,19 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
                           onChange={(e) => setItem(i, { unitPrice: Number(e.target.value) })}
                         />
                       </div>
-                      <span className="ml-auto text-sm font-semibold text-slate-900">
+                      <span className="ml-auto text-sm font-semibold text-admin-text">
                         {money((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}
                       </span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <button type="button" onClick={() => moveItem(i, -1)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><ArrowUp className="h-4 w-4" /></button>
-                    <button type="button" onClick={() => moveItem(i, 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><ArrowDown className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => moveItem(i, -1)} className="rounded p-1 text-admin-text-subtle hover:bg-admin-muted"><ArrowUp className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => moveItem(i, 1)} className="rounded p-1 text-admin-text-subtle hover:bg-admin-muted"><ArrowDown className="h-4 w-4" /></button>
                     <button
                       type="button"
                       onClick={() => set("items", v.items.filter((_, x) => x !== i))}
                       disabled={v.items.length === 1}
-                      className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+                      className="rounded p-1 text-admin-text-subtle hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -206,7 +206,7 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
         </Card>
 
         <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Notes & terms</h2>
+          <h2 className="mb-4 font-semibold text-admin-text">Notes & terms</h2>
           <div className="space-y-4">
             <div>
               <Label>Notes shown to the customer</Label>
@@ -222,12 +222,12 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
 
       <div className="space-y-6 lg:col-span-1">
         <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">{isInvoice ? "Invoice" : "Quotation"} details</h2>
+          <h2 className="mb-4 font-semibold text-admin-text">{isInvoice ? "Invoice" : "Quotation"} details</h2>
           <div className="space-y-4">
             {v.number && (
               <div>
                 <Label>Number</Label>
-                <Input value={v.number} readOnly className="bg-slate-50 font-semibold text-slate-600" />
+                <Input value={v.number} readOnly className="bg-admin-bg font-semibold text-admin-text-muted" />
               </div>
             )}
             <div>
@@ -264,10 +264,10 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
         </Card>
 
         <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Totals</h2>
+          <h2 className="mb-4 font-semibold text-admin-text">Totals</h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Subtotal</span>
+              <span className="text-admin-text-muted">Subtotal</span>
               <span className="font-semibold">{money(subtotal)}</span>
             </div>
             <div>
@@ -280,7 +280,7 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
             </div>
             {taxAmount > 0 && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Tax amount</span>
+                <span className="text-admin-text-muted">Tax amount</span>
                 <span className="font-semibold">{money(taxAmount)}</span>
               </div>
             )}
@@ -290,13 +290,13 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
                 <Input type="number" min={0} value={v.amountPaid} onChange={(e) => set("amountPaid", Number(e.target.value))} />
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-slate-200 pt-3">
-              <span className="font-semibold text-slate-900">Total</span>
-              <span className="text-xl font-bold text-slate-900">{money(total)}</span>
+            <div className="flex items-center justify-between border-t border-admin pt-3">
+              <span className="font-semibold text-admin-text">Total</span>
+              <span className="text-xl font-bold text-admin-text">{money(total)}</span>
             </div>
             {isInvoice && Number(v.amountPaid) > 0 && (
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-600">Balance due</span>
+                <span className="font-medium text-admin-text-muted">Balance due</span>
                 <span className={`font-bold ${balance > 0 ? "text-red-600" : "text-emerald-600"}`}>{money(balance)}</span>
               </div>
             )}

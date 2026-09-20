@@ -72,8 +72,8 @@ export function UserManager({ users, currentUserId, canManage }: { users: UserRo
       )}
 
       {canManage && showForm && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 font-semibold text-slate-900">Add a new team member</h2>
+        <div className="rounded-2xl border border-admin bg-white p-6">
+          <h2 className="mb-4 font-semibold text-admin-text">Add a new team member</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div><Label>Name *</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
             <div><Label>Email *</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
@@ -94,10 +94,10 @@ export function UserManager({ users, currentUserId, canManage }: { users: UserRo
 
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-admin bg-white">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-admin bg-admin-bg text-left text-xs uppercase tracking-wide text-admin-text-muted">
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Email</th>
@@ -106,17 +106,17 @@ export function UserManager({ users, currentUserId, canManage }: { users: UserRo
                 {canManage && <th className="px-4 py-3 text-right">Actions</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-admin-border">
               {users.map((u) => {
                 const isSelf = u.id === currentUserId;
                 const busy = busyId === u.id;
                 return (
-                  <tr key={u.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
+                  <tr key={u.id} className="hover:bg-admin-bg">
+                    <td className="px-4 py-3 font-medium text-admin-text">
                       {u.name}
                       {isSelf && <Badge tone="brand" className="ml-2">You</Badge>}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{u.email}</td>
+                    <td className="px-4 py-3 text-admin-text-muted">{u.email}</td>
                     <td className="px-4 py-3">
                       {canManage && !isSelf ? (
                         <Select
@@ -148,7 +148,7 @@ export function UserManager({ users, currentUserId, canManage }: { users: UserRo
                     {canManage && (
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          {busy && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                          {busy && <Loader2 className="h-4 w-4 animate-spin text-admin-text-subtle" />}
                           <button
                             type="button"
                             disabled={busy}
@@ -158,7 +158,7 @@ export function UserManager({ users, currentUserId, canManage }: { users: UserRo
                               if (pw && pw.length >= 8) run(u.id, () => updateUser(u.id, { password: pw }));
                               else if (pw) alert("Password must be at least 8 characters.");
                             }}
-                            className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                            className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-brand-600"
                           >
                             <KeyRound className="h-4 w-4" />
                           </button>
@@ -168,7 +168,7 @@ export function UserManager({ users, currentUserId, canManage }: { users: UserRo
                               disabled={busy}
                               title="Delete user"
                               onClick={() => { if (confirm(`Delete ${u.name}? This cannot be undone.`)) run(u.id, () => deleteUser(u.id)); }}
-                              className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

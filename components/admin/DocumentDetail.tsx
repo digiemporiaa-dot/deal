@@ -27,7 +27,7 @@ export async function DocumentDetail({ kind, id }: { kind: DocKind; id: string }
 
   return (
     <div>
-      <Link href={`/admin/${label.route}`} className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+      <Link href={`/admin/${label.route}`} className="mb-4 inline-flex items-center gap-1 text-sm text-admin-text-muted hover:text-admin-text">
         <ArrowLeft className="h-4 w-4" /> Back to {label.many.toLowerCase()}
       </Link>
 
@@ -38,7 +38,7 @@ export async function DocumentDetail({ kind, id }: { kind: DocKind; id: string }
           <Link
             href={`/admin/${label.route}/${doc.id}/print`}
             target="_blank"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong px-4 text-sm font-semibold text-admin-text hover:bg-admin-bg"
           >
             <Printer className="h-4 w-4" /> Print / PDF
           </Link>
@@ -54,7 +54,7 @@ export async function DocumentDetail({ kind, id }: { kind: DocKind; id: string }
           balance={totals.balance}
         />
         {doc.lead && (
-          <p className="mt-3 text-sm text-slate-500">
+          <p className="mt-3 text-sm text-admin-text-muted">
             Created from lead{" "}
             <Link href={`/admin/leads/${doc.lead.id}`} className="font-semibold text-brand-600 hover:underline">
               {doc.lead.name}

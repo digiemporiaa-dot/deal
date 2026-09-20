@@ -75,7 +75,7 @@ export default async function AdminPagesPage() {
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-admin bg-admin-bg text-left text-xs uppercase tracking-wide text-admin-text-muted">
                 <tr>
                   <th className="px-4 py-3">Title</th>
                   <th className="px-4 py-3">URL</th>
@@ -85,7 +85,7 @@ export default async function AdminPagesPage() {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-admin-border">
                 {pages.map((page) => {
                   const draft = parseDocument(page.draftContent);
                   const published = parseDocument(page.publishedContent);
@@ -98,11 +98,11 @@ export default async function AdminPagesPage() {
                     JSON.stringify(draft) !== JSON.stringify(published);
 
                   return (
-                    <tr key={page.id} className="hover:bg-slate-50">
+                    <tr key={page.id} className="hover:bg-admin-bg">
                       <td className="px-4 py-3">
                         <Link
                           href={`/admin/pages/${page.id}/builder`}
-                          className="font-medium text-slate-900 hover:text-brand-700"
+                          className="font-medium text-admin-text hover:text-brand-700"
                         >
                           {page.title}
                         </Link>
@@ -112,23 +112,23 @@ export default async function AdminPagesPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-500">/{page.slug}</td>
+                      <td className="px-4 py-3 text-admin-text-muted">/{page.slug}</td>
                       <td className="px-4 py-3">
                         {usesBuilder ? (
-                          <span className="text-xs text-slate-600">
+                          <span className="text-xs text-admin-text-muted">
                             Builder · {countNodes(draft.sections.length ? draft : published)} elements
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400">Classic editor</span>
+                          <span className="text-xs text-admin-text-subtle">Classic editor</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <Badge tone={page.status === "PUBLISHED" ? "green" : "slate"}>{page.status}</Badge>
                       </td>
-                      <td className="px-4 py-3 text-slate-500">
+                      <td className="px-4 py-3 text-admin-text-muted">
                         {formatDate(page.updatedAt)}
                         {page.updatedBy?.name && (
-                          <span className="block text-xs text-slate-400">{page.updatedBy.name}</span>
+                          <span className="block text-xs text-admin-text-subtle">{page.updatedBy.name}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -161,19 +161,19 @@ export default async function AdminPagesPage() {
       <div className="mt-6 flex flex-wrap gap-3 text-sm">
         <Link
           href="/admin/pages/sections"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong bg-white px-4 font-semibold text-admin-text hover:bg-admin-bg"
         >
           <Recycle className="h-4 w-4" /> Reusable sections
         </Link>
         <Link
           href="/admin/pages/templates"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong bg-white px-4 font-semibold text-admin-text hover:bg-admin-bg"
         >
           <LayoutTemplate className="h-4 w-4" /> Templates
         </Link>
         <Link
           href="/admin/pages/new"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong bg-white px-4 font-semibold text-admin-text hover:bg-admin-bg"
         >
           <Plus className="h-4 w-4" /> Classic editor
         </Link>
@@ -184,9 +184,9 @@ export default async function AdminPagesPage() {
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-admin bg-white p-4">
+      <p className="text-sm text-admin-text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-admin-text">{value}</p>
     </div>
   );
 }

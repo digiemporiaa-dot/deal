@@ -22,7 +22,7 @@ export function PageRowActions({
         <Link
           href={`/${slug}`}
           target="_blank"
-          className="rounded-md p-2 text-slate-400 hover:bg-slate-100"
+          className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted"
           title="View on site"
         >
           <ExternalLink className="h-4 w-4" />
@@ -30,7 +30,7 @@ export function PageRowActions({
       )}
       <Link
         href={`/admin/pages/${id}/edit`}
-        className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-brand-600"
         title="Edit"
       >
         <Pencil className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function PageRowActions({
         description="Visitors will get a 404 at this address. If the page is indexed, add a redirect first so the link keeps working."
         confirmLabel="Delete page"
         successMessage="Page deleted."
-        className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
       >
         <Trash2 className="h-4 w-4" />
       </ConfirmButton>

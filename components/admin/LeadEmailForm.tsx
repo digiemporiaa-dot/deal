@@ -76,7 +76,7 @@ export function LeadEmailForm({ leadId, leadEmail }: { leadId: string; leadEmail
             key={t.label}
             type="button"
             onClick={() => applyTemplate(t.label)}
-            className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
+            className="rounded-full border border-admin-border-strong px-3 py-1 text-xs font-medium text-admin-text-muted hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
           >
             {t.label}
           </button>
@@ -85,7 +85,7 @@ export function LeadEmailForm({ leadId, leadEmail }: { leadId: string; leadEmail
 
       <div>
         <Label>To</Label>
-        <Input value={leadEmail} readOnly className="bg-slate-50 text-slate-500" />
+        <Input value={leadEmail} readOnly className="bg-admin-bg text-admin-text-muted" />
       </div>
 
       <div>
@@ -101,7 +101,7 @@ export function LeadEmailForm({ leadId, leadEmail }: { leadId: string; leadEmail
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Write your message. The greeting and signature are added automatically."
         />
-        <p className="mt-1 text-xs text-slate-400">
+        <p className="mt-1 text-xs text-admin-text-subtle">
           Sent as a branded email — &ldquo;Hi {"{name}"}&rdquo; at the top and your signature at the bottom are added for you.
         </p>
       </div>

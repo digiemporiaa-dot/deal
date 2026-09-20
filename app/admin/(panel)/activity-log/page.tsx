@@ -138,7 +138,7 @@ export default async function ActivityLogPage({ searchParams }: { searchParams: 
         </button>
         <a
           href="/admin/activity-log"
-          className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 items-center rounded-lg border border-admin-border-strong bg-white px-4 text-sm font-semibold text-admin-text hover:bg-admin-bg"
         >
           Reset
         </a>
@@ -152,7 +152,7 @@ export default async function ActivityLogPage({ searchParams }: { searchParams: 
       ) : (
         <Card className="p-0">
           <TableWrap>
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-admin bg-admin-bg text-xs uppercase tracking-wide text-admin-text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">When</th>
                 <th className="px-4 py-3 font-medium">Who</th>
@@ -162,10 +162,10 @@ export default async function ActivityLogPage({ searchParams }: { searchParams: 
                 <th className="px-4 py-3 font-medium">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-admin-border">
               {rows.map((row) => (
                 <tr key={row.id} className="align-top">
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-500">
+                  <td className="whitespace-nowrap px-4 py-3 text-admin-text-muted">
                     {row.createdAt.toLocaleString("en-IN", {
                       day: "numeric",
                       month: "short",
@@ -175,17 +175,17 @@ export default async function ActivityLogPage({ searchParams }: { searchParams: 
                     })}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
-                    <p className="font-medium text-slate-900">{row.userName || "System"}</p>
-                    {row.userRole && <p className="text-xs text-slate-500">{row.userRole}</p>}
+                    <p className="font-medium text-admin-text">{row.userName || "System"}</p>
+                    {row.userRole && <p className="text-xs text-admin-text-muted">{row.userRole}</p>}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={ACTION_TONE[row.action] ?? "slate"}>
                       {row.action.replace(/_/g, " ")}
                     </Badge>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">{row.entity}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.description}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                  <td className="whitespace-nowrap px-4 py-3 text-admin-text-muted">{row.entity}</td>
+                  <td className="px-4 py-3 text-admin-text">{row.description}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-admin-text-subtle">
                     {row.ipAddress || "—"}
                   </td>
                 </tr>
@@ -203,7 +203,7 @@ export default async function ActivityLogPage({ searchParams }: { searchParams: 
         params={params}
       />
 
-      <p className="mt-6 flex items-center gap-2 text-xs text-slate-400">
+      <p className="mt-6 flex items-center gap-2 text-xs text-admin-text-subtle">
         <Activity className="h-3.5 w-3.5" />
         Entries are written automatically and cannot be edited or removed from the panel.
       </p>

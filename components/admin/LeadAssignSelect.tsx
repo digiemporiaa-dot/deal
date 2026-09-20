@@ -50,7 +50,7 @@ export function LeadAssignSelect({
           }
           setPending(false);
         }}
-        className={`h-9 rounded-lg border border-slate-300 px-2 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-50 ${className}`}
+        className={`h-9 rounded-lg border border-admin-border-strong px-2 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-50 ${className}`}
       >
         <option value="">Unassigned</option>
         {members.map((m) => (

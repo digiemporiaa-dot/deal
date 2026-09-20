@@ -42,7 +42,7 @@ export function PackageRowActions({
       <Link
         href={`/packages/${slug}`}
         target="_blank"
-        className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-admin-text"
         title="View on site"
       >
         <Eye className="h-4 w-4" />
@@ -50,7 +50,7 @@ export function PackageRowActions({
       <button
         onClick={() => toggle("featured")}
         disabled={pending}
-        className={`rounded-md p-2 hover:bg-slate-100 disabled:opacity-50 ${featured ? "text-amber-500" : "text-slate-400"}`}
+        className={`rounded-md p-2 hover:bg-admin-muted disabled:opacity-50 ${featured ? "text-amber-500" : "text-admin-text-subtle"}`}
         title={featured ? "Remove from featured" : "Mark as featured"}
       >
         <Star className={`h-4 w-4 ${featured ? "fill-current" : ""}`} />
@@ -58,14 +58,14 @@ export function PackageRowActions({
       <button
         onClick={() => toggle("published")}
         disabled={pending}
-        className={`rounded-md p-2 hover:bg-slate-100 disabled:opacity-50 ${published ? "text-emerald-500" : "text-slate-400"}`}
+        className={`rounded-md p-2 hover:bg-admin-muted disabled:opacity-50 ${published ? "text-emerald-500" : "text-admin-text-subtle"}`}
         title={published ? "Unpublish" : "Publish"}
       >
         {published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
       </button>
       <Link
         href={`/admin/packages/${id}/edit`}
-        className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-brand-600"
         title="Edit"
       >
         <Pencil className="h-4 w-4" />
@@ -76,7 +76,7 @@ export function PackageRowActions({
         description="This cannot be undone. If the package has bookings, unpublish it instead so the records stay intact."
         confirmLabel="Delete package"
         successMessage="Package deleted."
-        className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
         disabled={pending}
       >
         <Trash2 className="h-4 w-4" />

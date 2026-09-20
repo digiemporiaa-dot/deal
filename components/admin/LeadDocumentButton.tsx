@@ -30,7 +30,7 @@ export function LeadDocumentButton({ leadId }: { leadId: string }) {
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
         {pending ? "Creating…" : "Create quotation"}
       </button>
-      <p className="mt-2 text-xs text-slate-500">Prefills the customer&rsquo;s details — you just add prices.</p>
+      <p className="mt-2 text-xs text-admin-text-muted">Prefills the customer&rsquo;s details — you just add prices.</p>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );

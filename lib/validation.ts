@@ -355,6 +355,17 @@ export const customerQuerySchema = z.object({
 });
 export type CustomerQuery = z.infer<typeof customerQuerySchema>;
 
+/** Shared shape for the catalogue and content lists. */
+export const catalogueQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: z.enum(["published", "draft", "featured"]).optional(),
+  destination: z.string().trim().max(60).optional(),
+  sort: z.enum(["newest", "updated", "name", "price", "bookings"]).default("updated"),
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  perPage: z.coerce.number().int().min(1).max(200).default(25),
+});
+export type CatalogueQuery = z.infer<typeof catalogueQuerySchema>;
+
 export const activityQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   user: z.string().trim().max(60).optional(),

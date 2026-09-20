@@ -12,7 +12,7 @@ export default async function CouponsPage() {
   // checks the permission itself.
   await requirePermission("coupons:view");
 
-  const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: "desc" } });
+  const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: "desc" }, take: 300 });
   return (
     <div>
       <PageHeader title="Coupons" description="Create and manage discount codes" />

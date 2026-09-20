@@ -37,7 +37,7 @@ export function LeadFollowUp({ leadId, current }: { leadId: string; current: str
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <CalendarClock className={`h-4 w-4 ${due ? "text-red-500" : "text-slate-400"}`} />
+        <CalendarClock className={`h-4 w-4 ${due ? "text-red-500" : "text-admin-text-subtle"}`} />
         <Input
           type="date"
           value={value}
@@ -45,13 +45,13 @@ export function LeadFollowUp({ leadId, current }: { leadId: string; current: str
           onChange={(e) => save(e.target.value)}
           className="h-9"
         />
-        {pending && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+        {pending && <Loader2 className="h-4 w-4 animate-spin text-admin-text-subtle" />}
         {value && !pending && (
           <button
             type="button"
             onClick={() => save("")}
             title="Clear follow-up"
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+            className="rounded-md p-1.5 text-admin-text-subtle hover:bg-admin-muted hover:text-red-600"
           >
             <X className="h-4 w-4" />
           </button>
@@ -69,7 +69,7 @@ export function LeadFollowUp({ leadId, current }: { leadId: string; current: str
             type="button"
             disabled={pending}
             onClick={() => save(plusDays(q.days))}
-            className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+            className="rounded-full border border-admin-border-strong px-3 py-1 text-xs font-medium text-admin-text-muted hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
           >
             {q.label}
           </button>
@@ -77,7 +77,7 @@ export function LeadFollowUp({ leadId, current }: { leadId: string; current: str
       </div>
 
       {value && (
-        <p className={`text-xs ${due ? "font-semibold text-red-600" : "text-slate-500"}`}>
+        <p className={`text-xs ${due ? "font-semibold text-red-600" : "text-admin-text-muted"}`}>
           {due ? "Follow-up overdue" : `Next follow-up: ${new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
         </p>
       )}

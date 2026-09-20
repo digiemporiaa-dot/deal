@@ -11,8 +11,8 @@ export default async function TestimonialsPage() {
   await requirePermission("testimonials:view");
 
   const [items, packages] = await Promise.all([
-    prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } }),
-    prisma.travelPackage.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.testimonial.findMany({ orderBy: { createdAt: "desc" }, take: 300 }),
+    prisma.travelPackage.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
   ]);
 
   return (

@@ -50,8 +50,8 @@ export default async function ReportsPage({
               href={`/admin/reports?period=${r.key}`}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-300 text-slate-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
+                  ? "bg-admin-navy text-white"
+                  : "border border-admin-border-strong text-admin-text-muted hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
               }`}
             >
               {r.label}
@@ -92,13 +92,13 @@ export default async function ReportsPage({
       {/* Revenue by month */}
       <Card className="mt-6 p-5">
         <div className="mb-5 flex items-baseline justify-between">
-          <h2 className="font-semibold text-slate-900">Revenue by month</h2>
-          <span className="text-xs text-slate-400">Last 12 months</span>
+          <h2 className="font-semibold text-admin-text">Revenue by month</h2>
+          <span className="text-xs text-admin-text-subtle">Last 12 months</span>
         </div>
         <div className="flex h-52 items-end gap-1.5 sm:gap-3">
           {data.months.map((m) => (
             <div key={m.month} className="group flex flex-1 flex-col items-center gap-1.5">
-              <span className="text-[10px] font-semibold text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="text-[10px] font-semibold text-admin-text-muted opacity-0 transition-opacity group-hover:opacity-100">
                 {m.revenue > 0 ? formatCurrency(m.revenue) : ""}
               </span>
               <div className="flex w-full flex-1 items-end">
@@ -108,7 +108,7 @@ export default async function ReportsPage({
                   title={`${m.month}: ${formatCurrency(m.revenue)} from ${m.bookings} booking(s)`}
                 />
               </div>
-              <span className="text-[10px] text-slate-500">{m.month}</span>
+              <span className="text-[10px] text-admin-text-muted">{m.month}</span>
             </div>
           ))}
         </div>
@@ -116,11 +116,11 @@ export default async function ReportsPage({
 
       {/* Leads by month */}
       <Card className="mt-4 p-5">
-        <h2 className="mb-5 font-semibold text-slate-900">Enquiries by month</h2>
+        <h2 className="mb-5 font-semibold text-admin-text">Enquiries by month</h2>
         <div className="flex h-36 items-end gap-1.5 sm:gap-3">
           {data.months.map((m) => (
             <div key={m.month} className="flex flex-1 flex-col items-center gap-1.5">
-              <span className="text-[10px] font-semibold text-slate-600">{m.leads || ""}</span>
+              <span className="text-[10px] font-semibold text-admin-text-muted">{m.leads || ""}</span>
               <div className="flex w-full flex-1 items-end">
                 <div
                   className="w-full rounded-t-md bg-purple-400"
@@ -128,7 +128,7 @@ export default async function ReportsPage({
                   title={`${m.month}: ${m.leads} enquiries`}
                 />
               </div>
-              <span className="text-[10px] text-slate-500">{m.month}</span>
+              <span className="text-[10px] text-admin-text-muted">{m.month}</span>
             </div>
           ))}
         </div>
@@ -136,13 +136,13 @@ export default async function ReportsPage({
 
       {/* Staff performance */}
       <Card className="mt-6 overflow-hidden">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="font-semibold text-slate-900">Team performance</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Leads assigned in this period and what happened to them</p>
+        <div className="border-b border-admin px-5 py-4">
+          <h2 className="font-semibold text-admin-text">Team performance</h2>
+          <p className="mt-0.5 text-xs text-admin-text-muted">Leads assigned in this period and what happened to them</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-admin-bg text-left text-xs uppercase tracking-wide text-admin-text-muted">
               <tr>
                 <th className="px-5 py-3">Team member</th>
                 <th className="px-4 py-3 text-center">Assigned</th>
@@ -155,10 +155,10 @@ export default async function ReportsPage({
                 <th className="px-5 py-3">Conversion</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-admin-border">
               {data.staff.filter((s) => s.assigned > 0 || s.emailsSent > 0 || s.callsLogged > 0).length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-5 py-8 text-center text-sm text-slate-400">
+                  <td colSpan={9} className="px-5 py-8 text-center text-sm text-admin-text-subtle">
                     No lead activity in this period yet.
                   </td>
                 </tr>
@@ -166,31 +166,31 @@ export default async function ReportsPage({
               {data.staff
                 .filter((s) => s.assigned > 0 || s.emailsSent > 0 || s.callsLogged > 0)
                 .map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50">
+                  <tr key={s.id} className="hover:bg-admin-bg">
                     <td className="px-5 py-3">
-                      <span className="font-medium text-slate-900">{s.name}</span>
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-400">
+                      <span className="font-medium text-admin-text">{s.name}</span>
+                      <span className="block text-[11px] uppercase tracking-wide text-admin-text-subtle">
                         {s.role.replace(/_/g, " ")}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center font-semibold text-slate-900">{s.assigned}</td>
-                    <td className="px-4 py-3 text-center text-slate-600">{s.open}</td>
+                    <td className="px-4 py-3 text-center font-semibold text-admin-text">{s.assigned}</td>
+                    <td className="px-4 py-3 text-center text-admin-text-muted">{s.open}</td>
                     <td className="px-4 py-3 text-center font-semibold text-emerald-600">{s.converted}</td>
-                    <td className="px-4 py-3 text-center text-slate-500">{s.lost}</td>
-                    <td className="px-4 py-3 text-center text-slate-600">{s.emailsSent}</td>
-                    <td className="px-4 py-3 text-center text-slate-600">{s.callsLogged}</td>
-                    <td className={`px-4 py-3 text-center font-semibold ${s.overdue > 0 ? "text-red-600" : "text-slate-400"}`}>
+                    <td className="px-4 py-3 text-center text-admin-text-muted">{s.lost}</td>
+                    <td className="px-4 py-3 text-center text-admin-text-muted">{s.emailsSent}</td>
+                    <td className="px-4 py-3 text-center text-admin-text-muted">{s.callsLogged}</td>
+                    <td className={`px-4 py-3 text-center font-semibold ${s.overdue > 0 ? "text-red-600" : "text-admin-text-subtle"}`}>
                       {s.overdue || "—"}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-2 w-20 overflow-hidden rounded-full bg-admin-muted">
                           <div
                             className={`h-full rounded-full ${s.conversionRate >= 50 ? "bg-emerald-500" : s.conversionRate >= 25 ? "bg-amber-400" : "bg-slate-300"}`}
                             style={{ width: `${s.conversionRate}%` }}
                           />
                         </div>
-                        <span className="text-xs font-semibold text-slate-600">{s.conversionRate}%</span>
+                        <span className="text-xs font-semibold text-admin-text-muted">{s.conversionRate}%</span>
                       </div>
                     </td>
                   </tr>
@@ -203,15 +203,15 @@ export default async function ReportsPage({
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Pipeline funnel */}
         <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Lead pipeline</h2>
+          <h2 className="mb-4 font-semibold text-admin-text">Lead pipeline</h2>
           <div className="space-y-3">
             {data.statusCounts.map((s) => (
               <div key={s.status}>
                 <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="font-medium text-slate-700">{s.status.replace(/_/g, " ")}</span>
-                  <span className="font-semibold text-slate-900">{s.count}</span>
+                  <span className="font-medium text-admin-text">{s.status.replace(/_/g, " ")}</span>
+                  <span className="font-semibold text-admin-text">{s.count}</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-2.5 overflow-hidden rounded-full bg-admin-muted">
                   <div
                     className={`h-full rounded-full ${
                       s.status === "CONVERTED" ? "bg-emerald-500" : s.status === "LOST" ? "bg-red-400" : "bg-brand-500"
@@ -226,12 +226,12 @@ export default async function ReportsPage({
 
         {/* Sources */}
         <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-900">Where leads come from</h2>
+          <h2 className="mb-4 font-semibold text-admin-text">Where leads come from</h2>
           {data.sources.length === 0 ? (
-            <p className="text-sm text-slate-400">No leads in this period.</p>
+            <p className="text-sm text-admin-text-subtle">No leads in this period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="text-left text-xs uppercase tracking-wide text-admin-text-muted">
                 <tr>
                   <th className="pb-2">Source</th>
                   <th className="pb-2 text-center">Leads</th>
@@ -239,11 +239,11 @@ export default async function ReportsPage({
                   <th className="pb-2 text-right">Rate</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-admin-border">
                 {data.sources.map((s) => (
                   <tr key={s.source}>
-                    <td className="py-2.5 font-medium capitalize text-slate-900">{s.source}</td>
-                    <td className="py-2.5 text-center text-slate-600">{s.total}</td>
+                    <td className="py-2.5 font-medium capitalize text-admin-text">{s.source}</td>
+                    <td className="py-2.5 text-center text-admin-text-muted">{s.total}</td>
                     <td className="py-2.5 text-center font-semibold text-emerald-600">{s.converted}</td>
                     <td className="py-2.5 text-right">
                       <Badge tone={s.rate >= 30 ? "green" : s.rate >= 10 ? "amber" : "slate"}>{s.rate}%</Badge>
@@ -258,18 +258,18 @@ export default async function ReportsPage({
 
       {/* Top packages */}
       <Card className="mt-6 p-5">
-        <h2 className="mb-4 font-semibold text-slate-900">Best selling packages</h2>
+        <h2 className="mb-4 font-semibold text-admin-text">Best selling packages</h2>
         {data.topPackages.length === 0 ? (
-          <p className="text-sm text-slate-400">No bookings in this period.</p>
+          <p className="text-sm text-admin-text-subtle">No bookings in this period.</p>
         ) : (
           <div className="space-y-3">
             {data.topPackages.map((p) => (
-              <div key={p.name} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+              <div key={p.name} className="flex items-center justify-between gap-4 border-b border-admin pb-3 last:border-0 last:pb-0">
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-slate-900">{p.name}</p>
-                  <p className="text-xs text-slate-500">{p.bookings} booking{p.bookings === 1 ? "" : "s"}</p>
+                  <p className="truncate font-medium text-admin-text">{p.name}</p>
+                  <p className="text-xs text-admin-text-muted">{p.bookings} booking{p.bookings === 1 ? "" : "s"}</p>
                 </div>
-                <span className="shrink-0 font-semibold text-slate-900">{formatCurrency(p.revenue)}</span>
+                <span className="shrink-0 font-semibold text-admin-text">{formatCurrency(p.revenue)}</span>
               </div>
             ))}
           </div>

@@ -50,7 +50,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
   return (
     <div className="space-y-6">
       <Card className="p-5">
-        <h2 className="mb-4 font-semibold text-slate-900">Add a redirect</h2>
+        <h2 className="mb-4 font-semibold text-admin-text">Add a redirect</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <Label>Old URL (that no longer works)</Label>
@@ -83,7 +83,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add redirect
         </button>
         {error && <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-admin-text-muted">
           Use this whenever you change a page or package address, so old Google links and shared
           WhatsApp links keep working instead of showing a 404.
         </p>
@@ -98,7 +98,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-admin bg-admin-bg text-left text-xs uppercase tracking-wide text-admin-text-muted">
                 <tr>
                   <th className="px-4 py-3">Redirect</th>
                   <th className="px-4 py-3">Type</th>
@@ -107,21 +107,21 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-admin-border">
                 {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
+                  <tr key={r.id} className="hover:bg-admin-bg">
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <code className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{r.source}</code>
-                        <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                        <code className="rounded bg-admin-muted px-2 py-0.5 text-xs text-admin-text">{r.source}</code>
+                        <ArrowRight className="h-3.5 w-3.5 text-admin-text-subtle" />
                         <code className="rounded bg-brand-50 px-2 py-0.5 text-xs text-brand-700">{r.target}</code>
                       </div>
-                      {r.note && <p className="mt-1 text-xs text-slate-400">{r.note}</p>}
+                      {r.note && <p className="mt-1 text-xs text-admin-text-subtle">{r.note}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={r.statusCode === 301 || r.statusCode === 308 ? "brand" : "amber"}>{r.statusCode}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-center text-slate-600">{r.hits}</td>
+                    <td className="px-4 py-3 text-center text-admin-text-muted">{r.hits}</td>
                     <td className="px-4 py-3">
                       <Badge tone={r.isActive ? "green" : "slate"}>{r.isActive ? "Active" : "Off"}</Badge>
                     </td>
@@ -134,7 +134,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
                             await toggleRedirect(r.id, !r.isActive);
                             router.refresh();
                           }}
-                          className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-admin-text"
                         >
                           <Power className="h-4 w-4" />
                         </button>
@@ -146,7 +146,7 @@ export function RedirectManager({ rows }: { rows: RedirectRow[] }) {
                             await deleteRedirect(r.id);
                             router.refresh();
                           }}
-                          className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

@@ -22,7 +22,7 @@ export function BlogRowActions({
         <Link
           href={`/blog/${slug}`}
           target="_blank"
-          className="rounded-md p-2 text-slate-400 hover:bg-slate-100"
+          className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted"
           title="View on site"
         >
           <ExternalLink className="h-4 w-4" />
@@ -30,7 +30,7 @@ export function BlogRowActions({
       )}
       <Link
         href={`/admin/blogs/${id}/edit`}
-        className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-brand-600"
         title="Edit"
       >
         <Pencil className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function BlogRowActions({
         description="This cannot be undone. If the post is already indexed by Google, consider unpublishing it and adding a redirect instead."
         confirmLabel="Delete post"
         successMessage="Post deleted."
-        className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
       >
         <Trash2 className="h-4 w-4" />
       </ConfirmButton>

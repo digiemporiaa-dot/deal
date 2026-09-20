@@ -10,7 +10,7 @@ export default async function RedirectsPage() {
   // checks the permission itself.
   await requirePermission("redirects:view");
 
-  const rows = await prisma.redirect.findMany({ orderBy: { createdAt: "desc" } });
+  const rows = await prisma.redirect.findMany({ orderBy: { createdAt: "desc" }, take: 500 });
   return (
     <div>
       <PageHeader

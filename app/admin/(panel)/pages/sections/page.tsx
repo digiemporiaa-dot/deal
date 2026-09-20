@@ -39,7 +39,7 @@ export default async function ReusableSectionsPage() {
     <div>
       <Link
         href="/admin/pages"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-admin-text-muted hover:text-admin-text"
       >
         <ArrowLeft className="h-4 w-4" /> Pages
       </Link>
@@ -55,7 +55,7 @@ export default async function ReusableSectionsPage() {
           description="In the builder, select a section and use the Save as reusable control in the toolbar."
         />
       ) : (
-        <Card className="divide-y divide-slate-100 p-0">
+        <Card className="divide-y divide-admin-border p-0">
           {sections.map((section) => {
             const document = parseDocument(section.content);
             return (
@@ -64,13 +64,13 @@ export default async function ReusableSectionsPage() {
                   <Recycle className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-900">{section.name}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="text-sm font-medium text-admin-text">{section.name}</p>
+                  <p className="mt-0.5 text-xs text-admin-text-muted">
                     {countNodes(document)} elements · updated {formatDate(section.updatedAt)}
                     {section.createdBy?.name ? ` · by ${section.createdBy.name}` : ""}
                   </p>
                   {section.description && (
-                    <p className="mt-1 text-xs text-slate-400">{section.description}</p>
+                    <p className="mt-1 text-xs text-admin-text-subtle">{section.description}</p>
                   )}
                 </div>
                 {canDelete && <DeleteReusableButton id={section.id} name={section.name} />}

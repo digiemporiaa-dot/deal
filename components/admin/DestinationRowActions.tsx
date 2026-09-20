@@ -40,7 +40,7 @@ export function DestinationRowActions({
       <button
         onClick={() => toggle("isFeatured")}
         disabled={pending}
-        className={`rounded-md p-2 hover:bg-slate-100 disabled:opacity-50 ${featured ? "text-amber-500" : "text-slate-400"}`}
+        className={`rounded-md p-2 hover:bg-admin-muted disabled:opacity-50 ${featured ? "text-amber-500" : "text-admin-text-subtle"}`}
         title={featured ? "Remove from featured" : "Mark as featured"}
       >
         <Star className={`h-4 w-4 ${featured ? "fill-current" : ""}`} />
@@ -48,14 +48,14 @@ export function DestinationRowActions({
       <button
         onClick={() => toggle("isPublished")}
         disabled={pending}
-        className={`rounded-md p-2 hover:bg-slate-100 disabled:opacity-50 ${published ? "text-emerald-500" : "text-slate-400"}`}
+        className={`rounded-md p-2 hover:bg-admin-muted disabled:opacity-50 ${published ? "text-emerald-500" : "text-admin-text-subtle"}`}
         title={published ? "Unpublish" : "Publish"}
       >
         {published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
       </button>
       <Link
         href={`/admin/destinations/${id}/edit`}
-        className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-admin-muted hover:text-brand-600"
         title="Edit"
       >
         <Pencil className="h-4 w-4" />
@@ -66,7 +66,7 @@ export function DestinationRowActions({
         description="This cannot be undone. A destination that still has packages cannot be deleted — move or remove them first."
         confirmLabel="Delete destination"
         successMessage="Destination deleted."
-        className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+        className="rounded-md p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
         disabled={pending}
       >
         <Trash2 className="h-4 w-4" />

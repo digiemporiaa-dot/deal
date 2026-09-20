@@ -58,34 +58,34 @@ export function PageForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <div className="rounded-2xl border border-admin bg-white p-6">
         <div><Label>Page title *</Label><Input {...register("title", { required: "Title is required" })} /><FieldError message={errors.title?.message} /></div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <div className="rounded-2xl border border-admin bg-white p-6">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">Content sections</h2>
+          <h2 className="font-semibold text-admin-text">Content sections</h2>
           <button
             type="button"
             onClick={() => sectionArray.append({ ...EMPTY_SECTION })}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-md border border-admin-border-strong px-2.5 py-1.5 text-xs font-medium text-admin-text hover:bg-admin-bg"
           >
             <Plus className="h-3.5 w-3.5" /> Add section
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">Each section has an optional heading and its own content. Sections appear on the page in this order. Tip: your page title is already the H1, so use H2 for section headings.</p>
+        <p className="mb-4 text-xs text-admin-text-muted">Each section has an optional heading and its own content. Sections appear on the page in this order. Tip: your page title is already the H1, so use H2 for section headings.</p>
         <div className="space-y-4">
           {sectionArray.fields.map((field, index) => (
-            <div key={field.id} className="rounded-xl border border-slate-200 p-4">
+            <div key={field.id} className="rounded-xl border border-admin p-4">
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Section {index + 1}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-admin-text-subtle">Section {index + 1}</span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     disabled={index === 0}
                     onClick={() => sectionArray.move(index, index - 1)}
                     aria-label="Move up"
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                    className="rounded-md p-1.5 text-admin-text-subtle hover:bg-admin-muted disabled:opacity-30"
                   >
                     <ChevronUp className="h-4 w-4" />
                   </button>
@@ -94,7 +94,7 @@ export function PageForm({
                     disabled={index === sectionArray.fields.length - 1}
                     onClick={() => sectionArray.move(index, index + 1)}
                     aria-label="Move down"
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                    className="rounded-md p-1.5 text-admin-text-subtle hover:bg-admin-muted disabled:opacity-30"
                   >
                     <ChevronDown className="h-4 w-4" />
                   </button>
@@ -102,7 +102,7 @@ export function PageForm({
                     type="button"
                     onClick={() => { if (sectionArray.fields.length > 1 || confirm("Remove the only section?")) sectionArray.remove(index); }}
                     aria-label="Remove section"
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    className="rounded-md p-1.5 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -137,9 +137,9 @@ export function PageForm({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900">Page settings</h2>
-          <div><Label>Slug (URL)</Label><Input {...register("slug")} placeholder="about" /><p className="mt-1 text-xs text-slate-500">The page shows at yoursite.com/slug — for example &ldquo;about&rdquo; makes /about. Be careful changing this on an existing page.</p></div>
+        <div className="rounded-2xl border border-admin bg-white p-6 space-y-4">
+          <h2 className="font-semibold text-admin-text">Page settings</h2>
+          <div><Label>Slug (URL)</Label><Input {...register("slug")} placeholder="about" /><p className="mt-1 text-xs text-admin-text-muted">The page shows at yoursite.com/slug — for example &ldquo;about&rdquo; makes /about. Be careful changing this on an existing page.</p></div>
           <div><Label>Status</Label>
             <Select {...register("status")}>
               <option value="PUBLISHED">Published</option>
@@ -149,36 +149,36 @@ export function PageForm({
           <PagePreviewLink slug={watch("slug")} />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900">SEO</h2>
+        <div className="rounded-2xl border border-admin bg-white p-6 space-y-4">
+          <h2 className="font-semibold text-admin-text">SEO</h2>
           <div><Label>SEO title</Label><Input {...register("seoTitle")} /></div>
           <div><Label>Meta description</Label><Textarea rows={2} {...register("seoDescription")} /></div>
-          <div><Label>Featured / OG image URL (optional)</Label><Input {...register("ogImage")} placeholder="https://…/image.jpg" /><p className="mt-1 text-xs text-slate-500">Shown when the page is shared on WhatsApp, Facebook, etc. Recommended size 1200×630.</p></div>
+          <div><Label>Featured / OG image URL (optional)</Label><Input {...register("ogImage")} placeholder="https://…/image.jpg" /><p className="mt-1 text-xs text-admin-text-muted">Shown when the page is shared on WhatsApp, Facebook, etc. Recommended size 1200×630.</p></div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <div className="rounded-2xl border border-admin bg-white p-6">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">FAQs (optional)</h2>
+          <h2 className="font-semibold text-admin-text">FAQs (optional)</h2>
           <button
             type="button"
             onClick={() => faqArray.append({ question: "", answer: "" })}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-md border border-admin-border-strong px-2.5 py-1.5 text-xs font-medium text-admin-text hover:bg-admin-bg"
           >
             <Plus className="h-3.5 w-3.5" /> Add FAQ
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">FAQs show at the bottom of the page and automatically add FAQ schema markup for Google.</p>
+        <p className="mb-4 text-xs text-admin-text-muted">FAQs show at the bottom of the page and automatically add FAQ schema markup for Google.</p>
         <div className="space-y-4">
           {faqArray.fields.map((field, index) => (
-            <div key={field.id} className="rounded-xl border border-slate-200 p-4">
+            <div key={field.id} className="rounded-xl border border-admin p-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">FAQ {index + 1}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-admin-text-subtle">FAQ {index + 1}</span>
                 <button
                   type="button"
                   onClick={() => faqArray.remove(index)}
                   aria-label="Remove FAQ"
-                  className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-md p-1.5 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -189,7 +189,7 @@ export function PageForm({
               </div>
             </div>
           ))}
-          {faqArray.fields.length === 0 && <p className="text-sm text-slate-400">No FAQs — click &ldquo;Add FAQ&rdquo; if you want a FAQ section on this page.</p>}
+          {faqArray.fields.length === 0 && <p className="text-sm text-admin-text-subtle">No FAQs — click &ldquo;Add FAQ&rdquo; if you want a FAQ section on this page.</p>}
         </div>
       </div>
 

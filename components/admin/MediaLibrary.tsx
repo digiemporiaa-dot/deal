@@ -209,10 +209,10 @@ export function MediaLibrary({
             event.preventDefault();
             void upload(event.dataTransfer.files);
           }}
-          className="mb-6 rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center"
+          className="mb-6 rounded-2xl border-2 border-dashed border-admin-border-strong bg-white p-8 text-center"
         >
-          <Upload className="mx-auto h-8 w-8 text-slate-400" />
-          <p className="mt-2 text-sm text-slate-600">Drag and drop images here, or</p>
+          <Upload className="mx-auto h-8 w-8 text-admin-text-subtle" />
+          <p className="mt-2 text-sm text-admin-text-muted">Drag and drop images here, or</p>
 
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <button
@@ -231,7 +231,7 @@ export function MediaLibrary({
               )}
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500">into folder</span>
+              <span className="text-sm text-admin-text-muted">into folder</span>
               <Input
                 value={uploadFolder}
                 onChange={(event) => setUploadFolder(event.target.value)}
@@ -249,7 +249,7 @@ export function MediaLibrary({
             className="hidden"
             onChange={(event) => void upload(event.target.files)}
           />
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-admin-text-subtle">
             JPG, PNG, WEBP, GIF or AVIF · up to 8MB each. The file type is checked from its
             contents, not its name.
           </p>
@@ -262,7 +262,7 @@ export function MediaLibrary({
         <div className="min-w-[220px] flex-1">
           <Label htmlFor="media-search">Search</Label>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-admin-text-subtle" />
             <Input
               id="media-search"
               value={query}
@@ -298,7 +298,7 @@ export function MediaLibrary({
               setFolder("");
               void load({ page: 1, q: "", folder: "" });
             }}
-            className="inline-flex h-10 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-admin-border-strong bg-white px-3 text-sm font-medium text-admin-text hover:bg-admin-bg"
           >
             <X className="h-4 w-4" /> Clear
           </button>
@@ -308,16 +308,16 @@ export function MediaLibrary({
       {loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 10 }).map((_, index) => (
-            <div key={index} className="aspect-square animate-pulse rounded-xl bg-slate-100" />
+            <div key={index} className="aspect-square animate-pulse rounded-xl bg-admin-muted" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center">
-          <FolderOpen className="mx-auto h-8 w-8 text-slate-300" />
-          <p className="mt-3 font-medium text-slate-900">
+        <div className="rounded-2xl border border-dashed border-admin-border-strong p-12 text-center">
+          <FolderOpen className="mx-auto h-8 w-8 text-admin-text-subtle" />
+          <p className="mt-3 font-medium text-admin-text">
             {query || folder ? "Nothing matches those filters" : "No media yet"}
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-admin-text-muted">
             {query || folder
               ? "Try a different search term or folder."
               : "Upload your first image to start building the library."}
@@ -328,12 +328,12 @@ export function MediaLibrary({
           {items.map((item) => (
             <div
               key={item.id}
-              className="group overflow-hidden rounded-xl border border-slate-200 bg-white"
+              className="group overflow-hidden rounded-xl border border-admin bg-white"
             >
               <button
                 type="button"
                 onClick={() => (onSelect ? onSelect(item) : canEdit ? setEditing(item) : undefined)}
-                className="relative block aspect-square w-full bg-slate-100"
+                className="relative block aspect-square w-full bg-admin-muted"
                 title={onSelect ? "Use this image" : item.filename}
               >
                 <Image
@@ -355,10 +355,10 @@ export function MediaLibrary({
               </button>
 
               <div className="px-2 pb-2 pt-1.5">
-                <p className="truncate text-xs font-medium text-slate-700" title={item.filename}>
+                <p className="truncate text-xs font-medium text-admin-text" title={item.filename}>
                   {item.originalFilename || item.filename}
                 </p>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-admin-text-subtle">
                   {item.width && item.height ? `${item.width}×${item.height} · ` : ""}
                   {formatFileSize(item.size)}
                 </p>
@@ -367,7 +367,7 @@ export function MediaLibrary({
                   <button
                     type="button"
                     onClick={() => void copy(item.url)}
-                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100"
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-admin-text-muted hover:bg-admin-muted"
                     title="Copy URL"
                   >
                     {copied === item.url ? (
@@ -380,7 +380,7 @@ export function MediaLibrary({
                     <button
                       type="button"
                       onClick={() => setEditing(item)}
-                      className="rounded-md px-1.5 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      className="rounded-md px-1.5 py-1 text-admin-text-subtle hover:bg-admin-muted hover:text-admin-text"
                       title="Edit details"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -398,7 +398,7 @@ export function MediaLibrary({
 
       {pageCount > 1 && (
         <div className="mt-6 flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-admin-text-muted">
             Page {page} of {pageCount} · {total} images
           </p>
           <div className="flex gap-2">
@@ -406,7 +406,7 @@ export function MediaLibrary({
               type="button"
               disabled={page <= 1 || loading}
               onClick={() => void load({ page: page - 1 })}
-              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              className="inline-flex h-9 items-center rounded-lg border border-admin-border-strong bg-white px-3 text-sm font-medium text-admin-text hover:bg-admin-bg disabled:opacity-40"
             >
               Previous
             </button>
@@ -414,7 +414,7 @@ export function MediaLibrary({
               type="button"
               disabled={page >= pageCount || loading}
               onClick={() => void load({ page: page + 1 })}
-              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              className="inline-flex h-9 items-center rounded-lg border border-admin-border-strong bg-white px-3 text-sm font-medium text-admin-text hover:bg-admin-bg disabled:opacity-40"
             >
               Next
             </button>
@@ -449,7 +449,7 @@ function DeleteMediaButton({
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded-md px-1.5 py-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+        className="rounded-md px-1.5 py-1 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"
         title={`Delete ${item.filename}`}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -474,7 +474,7 @@ function DeleteMediaButton({
       <button
         type="button"
         onClick={() => setConfirming(false)}
-        className="rounded-md px-1 py-1 text-[11px] text-slate-500 hover:text-slate-700"
+        className="rounded-md px-1 py-1 text-[11px] text-admin-text-muted hover:text-admin-text"
       >
         No
       </button>
@@ -507,7 +507,7 @@ function MediaDetails({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-admin-navy/50 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -517,17 +517,17 @@ function MediaDetails({
         className="grid max-h-[90vh] w-full max-w-3xl grid-cols-1 overflow-y-auto rounded-2xl bg-white sm:grid-cols-2"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative aspect-square bg-slate-100">
+        <div className="relative aspect-square bg-admin-muted">
           <Image src={item.url} alt={alt || item.filename} fill sizes="400px" className="object-contain" />
         </div>
 
         <div className="p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate font-semibold text-slate-900">
+              <h2 className="truncate font-semibold text-admin-text">
                 {item.originalFilename || item.filename}
               </h2>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-admin-text-muted">
                 {item.mimeType} · {formatFileSize(item.size)}
                 {item.width && item.height ? ` · ${item.width}×${item.height}` : ""}
               </p>
@@ -536,7 +536,7 @@ function MediaDetails({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100"
+              className="rounded-md p-1 text-admin-text-subtle hover:bg-admin-muted"
             >
               <X className="h-4 w-4" />
             </button>
@@ -597,7 +597,7 @@ function MediaDetails({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="inline-flex h-10 items-center rounded-lg border border-admin-border-strong bg-white px-4 text-sm font-semibold text-admin-text hover:bg-admin-bg"
             >
               Cancel
             </button>

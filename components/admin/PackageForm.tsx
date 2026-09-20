@@ -134,17 +134,49 @@ export function PackageForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      {/* Tab bar */}
-      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1">
+      {/*
+        A tablist rather than eleven stacked fieldsets: a package has enough
+        fields to make one long form unreadable. Panels stay mounted and are
+        only hidden, so a half-filled field survives switching tabs to check
+        something — and so required-field validation still finds them.
+      */}
+      <div
+        role="tablist"
+        aria-label="Package sections"
+        onKeyDown={(event) => {
+          const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+          if (!keys.includes(event.key)) return;
+          event.preventDefault();
+          const index = TABS.indexOf(tab);
+          const next =
+            event.key === "ArrowRight"
+              ? TABS[(index + 1) % TABS.length]
+              : event.key === "ArrowLeft"
+                ? TABS[(index - 1 + TABS.length) % TABS.length]
+                : event.key === "Home"
+                  ? TABS[0]
+                  : TABS[TABS.length - 1];
+          if (next) {
+            setTab(next);
+            document.getElementById(`package-tab-${next}`)?.focus();
+          }
+        }}
+        className="admin-scroll -mb-px flex gap-1 overflow-x-auto border-b border-admin"
+      >
         {TABS.map((t) => (
           <button
             key={t}
+            id={`package-tab-${t}`}
+            role="tab"
             type="button"
+            aria-selected={tab === t}
+            aria-controls={`package-panel-${t}`}
+            tabIndex={tab === t ? 0 : -1}
             onClick={() => setTab(t)}
             className={
               tab === t
-                ? "rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white"
-                : "rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                ? "admin-focus shrink-0 whitespace-nowrap border-b-2 border-brand-600 px-3 py-2.5 text-[13px] font-medium text-brand-700"
+                : "admin-focus shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-admin-text-muted hover:text-admin-text"
             }
           >
             {t}
@@ -152,9 +184,9 @@ export function PackageForm({
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <div className="admin-card admin-card-shadow mt-5 p-5">
         {/* Basic */}
-        <Section show={tab === "Basic"}>
+        <Section show={tab === "Basic"} tab="Basic">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label>Package name *</Label>
@@ -192,7 +224,7 @@ export function PackageForm({
         </Section>
 
         {/* Pricing */}
-        <Section show={tab === "Pricing"}>
+        <Section show={tab === "Pricing"} tab="Pricing">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div><Label>Duration (days) *</Label><Input type="number" min={1} {...register("durationDays")} /></div>
             <div><Label>Duration (nights) *</Label><Input type="number" min={0} {...register("durationNights")} /></div>
@@ -212,7 +244,7 @@ export function PackageForm({
         </Section>
 
         {/* Images */}
-        <Section show={tab === "Images"}>
+        <Section show={tab === "Images"} tab="Images">
           <RepeaterHeader title="Gallery images" hint="Paste image URLs. First image is the cover." />
           <ObjectRepeater
             control={control}
@@ -229,13 +261,13 @@ export function PackageForm({
         </Section>
 
         {/* Highlights */}
-        <Section show={tab === "Highlights"}>
+        <Section show={tab === "Highlights"} tab="Highlights">
           <RepeaterHeader title="Highlights" hint="Key selling points shown on the package page." />
           <StringRepeater control={control} register={register} name="highlights" placeholder="e.g. Desert safari with BBQ dinner" addLabel="Add highlight" />
         </Section>
 
         {/* Itinerary — unlimited days */}
-        <Section show={tab === "Itinerary"}>
+        <Section show={tab === "Itinerary"} tab="Itinerary">
           <RepeaterHeader title="Day-by-day itinerary" hint="Add as many days as you need. Days are auto-numbered." />
           <ObjectRepeater
             control={control}
@@ -259,7 +291,7 @@ export function PackageForm({
         </Section>
 
         {/* Hotels */}
-        <Section show={tab === "Hotels"}>
+        <Section show={tab === "Hotels"} tab="Hotels">
           <RepeaterHeader title="Hotels" />
           <ObjectRepeater
             control={control}
@@ -279,7 +311,7 @@ export function PackageForm({
         </Section>
 
         {/* Activities */}
-        <Section show={tab === "Activities"}>
+        <Section show={tab === "Activities"} tab="Activities">
           <RepeaterHeader title="Activities" />
           <ObjectRepeater
             control={control}
@@ -297,16 +329,16 @@ export function PackageForm({
         </Section>
 
         {/* Inclusions / Exclusions */}
-        <Section show={tab === "Inclusions"}>
+        <Section show={tab === "Inclusions"} tab="Inclusions">
           <RepeaterHeader title="What's included" />
           <StringRepeater control={control} register={register} name="inclusions" placeholder="e.g. Daily breakfast" addLabel="Add inclusion" />
-          <div className="my-6 border-t border-slate-100" />
+          <div className="my-6 border-t border-admin" />
           <RepeaterHeader title="What's not included" />
           <StringRepeater control={control} register={register} name="exclusions" placeholder="e.g. Airfare" addLabel="Add exclusion" />
         </Section>
 
         {/* FAQs */}
-        <Section show={tab === "FAQs"}>
+        <Section show={tab === "FAQs"} tab="FAQs">
           <RepeaterHeader title="FAQs" />
           <ObjectRepeater
             control={control}
@@ -323,12 +355,12 @@ export function PackageForm({
         </Section>
 
         {/* SEO */}
-        <Section show={tab === "SEO"}>
+        <Section show={tab === "SEO"} tab="SEO">
           <div className="grid grid-cols-1 gap-4">
             <div>
               <Label>Travel themes</Label>
               <Input {...register("tags")} placeholder="honeymoon, beach, luxury" />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-admin-text-muted">
                 Comma separated. Used to suggest related packages to visitors.
               </p>
             </div>
@@ -338,7 +370,7 @@ export function PackageForm({
         </Section>
 
         {/* Publish */}
-        <Section show={tab === "Publish"}>
+        <Section show={tab === "Publish"} tab="Publish">
           <div className="space-y-4">
             <Toggle register={register} name="published" label="Published" hint="Visible on the public website." />
             <Toggle register={register} name="featured" label="Featured" hint="Show on the homepage and featured sections." />
@@ -360,15 +392,33 @@ export function PackageForm({
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-function Section({ show, children }: { show: boolean; children: React.ReactNode }) {
-  return <div className={show ? "block" : "hidden"}>{children}</div>;
+function Section({
+  show,
+  tab,
+  children,
+}: {
+  show: boolean;
+  /** The tab this panel belongs to, so the two can be associated. */
+  tab?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      id={tab ? `package-panel-${tab}` : undefined}
+      role={tab ? "tabpanel" : undefined}
+      aria-labelledby={tab ? `package-tab-${tab}` : undefined}
+      className={show ? "block" : "hidden"}
+    >
+      {children}
+    </div>
+  );
 }
 
 function RepeaterHeader({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="mb-3">
-      <h3 className="font-semibold text-slate-900">{title}</h3>
-      {hint && <p className="text-sm text-slate-500">{hint}</p>}
+      <h3 className="font-semibold text-admin-text">{title}</h3>
+      {hint && <p className="text-sm text-admin-text-muted">{hint}</p>}
     </div>
   );
 }
@@ -382,11 +432,11 @@ function Toggle({
   hint?: string;
 }) {
   return (
-    <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
-      <input type="checkbox" {...register(name)} className="mt-0.5 h-5 w-5 rounded border-slate-300 text-brand-600" />
+    <label className="flex items-start gap-3 rounded-xl border border-admin p-4">
+      <input type="checkbox" {...register(name)} className="mt-0.5 h-5 w-5 rounded border-admin-border-strong text-brand-600" />
       <span>
-        <span className="block font-medium text-slate-900">{label}</span>
-        {hint && <span className="block text-sm text-slate-500">{hint}</span>}
+        <span className="block font-medium text-admin-text">{label}</span>
+        {hint && <span className="block text-sm text-admin-text-muted">{hint}</span>}
       </span>
     </label>
   );
@@ -407,9 +457,9 @@ function StringRepeater({
     <div className="space-y-2">
       {fields.map((field, index) => (
         <div key={field.id} className="flex items-center gap-2">
-          <GripVertical className="h-4 w-4 shrink-0 text-slate-300" />
+          <GripVertical className="h-4 w-4 shrink-0 text-admin-text-subtle" />
           <Input {...register(`${name}.${index}.value`)} placeholder={placeholder} />
-          <button type="button" onClick={() => remove(index)} className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove">
+          <button type="button" onClick={() => remove(index)} className="shrink-0 rounded-lg p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600" aria-label="Remove">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
@@ -438,14 +488,14 @@ function ObjectRepeater<
   return (
     <div className="space-y-4">
       {fields.length === 0 && (
-        <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-400">
+        <p className="rounded-lg border border-dashed border-admin-border-strong p-4 text-center text-sm text-admin-text-subtle">
           No items yet. Click &ldquo;{addLabel}&rdquo; to begin.
         </p>
       )}
       {fields.map((field, index) => (
-        <div key={field.id} className="rounded-xl border border-slate-200 p-4">
+        <div key={field.id} className="rounded-xl border border-admin p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700">{itemLabel ? itemLabel(index) : `Item ${index + 1}`}</span>
+            <span className="text-sm font-semibold text-admin-text">{itemLabel ? itemLabel(index) : `Item ${index + 1}`}</span>
             <button type="button" onClick={() => remove(index)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
               <Trash2 className="h-3.5 w-3.5" /> Remove
             </button>

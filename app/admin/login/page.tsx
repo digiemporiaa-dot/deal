@@ -23,14 +23,14 @@ export default function AdminLoginPage() {
   const [state, formAction] = useActionState<LoginState, FormData>(loginAction, undefined);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-admin-muted px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-admin bg-white p-8 shadow-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <span className="grid h-12 w-12 place-items-center rounded-xl bg-brand-600 text-white">
             <Plane className="h-6 w-6" />
           </span>
-          <h1 className="mt-4 text-xl font-bold text-slate-900">Admin Panel</h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to manage your travel business</p>
+          <h1 className="mt-4 text-xl font-bold text-admin-text">Admin Panel</h1>
+          <p className="mt-1 text-sm text-admin-text-muted">Sign in to manage your travel business</p>
         </div>
 
         <form action={formAction} className="space-y-4">

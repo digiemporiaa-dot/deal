@@ -46,7 +46,7 @@ export default async function RevisionsPage({ params }: { params: Promise<{ id: 
     <div>
       <Link
         href={`/admin/pages/${page.id}/builder`}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-admin-text-muted hover:text-admin-text"
       >
         <ArrowLeft className="h-4 w-4" /> Back to the builder
       </Link>
@@ -62,23 +62,23 @@ export default async function RevisionsPage({ params }: { params: Promise<{ id: 
           description="A revision is recorded every time the page is published, and whenever you save one by hand."
         />
       ) : (
-        <Card className="divide-y divide-slate-100 p-0">
+        <Card className="divide-y divide-admin-border p-0">
           {revisions.map((revision, index) => {
             const document = parseDocument(revision.content);
             return (
               <div key={revision.id} className="flex flex-wrap items-center gap-3 p-4">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-admin-muted text-admin-text-muted">
                   <History className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                  <p className="flex items-center gap-2 text-sm font-medium text-admin-text">
                     Version {revision.version}
                     {index === 0 && <Badge tone="brand">Latest</Badge>}
                     <Badge tone={revision.reason === "publish" ? "green" : "slate"}>
                       {REASON_LABEL[revision.reason] ?? revision.reason}
                     </Badge>
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-admin-text-muted">
                     {revision.createdAt.toLocaleString("en-IN", {
                       day: "numeric",
                       month: "short",
@@ -91,7 +91,7 @@ export default async function RevisionsPage({ params }: { params: Promise<{ id: 
                     {document.sections.length} section{document.sections.length === 1 ? "" : "s"},{" "}
                     {countNodes(document)} elements
                   </p>
-                  {revision.note && <p className="mt-1 text-xs text-slate-400">{revision.note}</p>}
+                  {revision.note && <p className="mt-1 text-xs text-admin-text-subtle">{revision.note}</p>}
                 </div>
                 <RestoreRevisionButton pageId={page.id} revisionId={revision.id} version={revision.version} />
               </div>

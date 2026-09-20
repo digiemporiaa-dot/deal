@@ -37,7 +37,7 @@ export function TestimonialManager({ items, packages }: { items: Item[]; package
       </div>
 
       {showForm && (
-        <form onSubmit={submit} className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
+        <form onSubmit={submit} className="mb-6 rounded-2xl border border-admin bg-white p-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div><Label>Customer name *</Label><Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} required /></div>
             <div><Label>Rating</Label>
@@ -56,7 +56,7 @@ export function TestimonialManager({ items, packages }: { items: Item[]; package
             <div className="sm:col-span-2"><Label>Review *</Label><Textarea rows={3} value={form.review} onChange={(e) => setForm({ ...form, review: e.target.value })} required /></div>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-brand-600" /> Published</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} className="h-4 w-4 rounded border-admin-border-strong text-brand-600" /> Published</label>
             <Button type="submit" disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
           </div>
         </form>
@@ -64,21 +64,21 @@ export function TestimonialManager({ items, packages }: { items: Item[]; package
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {items.map((t) => (
-          <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div key={t.id} className="rounded-2xl border border-admin bg-white p-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold text-slate-900">{t.customerName}</p>
-                <div className="flex gap-0.5">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={i < t.rating ? "h-3.5 w-3.5 fill-amber-400 text-amber-400" : "h-3.5 w-3.5 text-slate-300"} />)}</div>
+                <p className="font-semibold text-admin-text">{t.customerName}</p>
+                <div className="flex gap-0.5">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={i < t.rating ? "h-3.5 w-3.5 fill-amber-400 text-amber-400" : "h-3.5 w-3.5 text-admin-text-subtle"} />)}</div>
               </div>
               <Badge tone={t.published ? "green" : "slate"}>{t.published ? "Published" : "Hidden"}</Badge>
             </div>
-            <p className="mt-2 text-sm text-slate-600">&ldquo;{t.review}&rdquo;</p>
-            {t.destination && <p className="mt-1 text-xs text-slate-400">{t.destination}</p>}
+            <p className="mt-2 text-sm text-admin-text-muted">&ldquo;{t.review}&rdquo;</p>
+            {t.destination && <p className="mt-1 text-xs text-admin-text-subtle">{t.destination}</p>}
             <div className="mt-3 flex gap-2">
-              <button onClick={async () => { await toggleTestimonial(t.id); router.refresh(); }} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50">
+              <button onClick={async () => { await toggleTestimonial(t.id); router.refresh(); }} className="inline-flex items-center gap-1 rounded-lg border border-admin-border-strong px-2.5 py-1 text-xs font-medium hover:bg-admin-bg">
                 {t.published ? <><EyeOff className="h-3.5 w-3.5" /> Hide</> : <><Eye className="h-3.5 w-3.5" /> Show</>}
               </button>
-              <button onClick={async () => { if (confirm("Delete this testimonial?")) { await deleteTestimonial(t.id); router.refresh(); } }} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
+              <button onClick={async () => { if (confirm("Delete this testimonial?")) { await deleteTestimonial(t.id); router.refresh(); } }} className="inline-flex items-center gap-1 rounded-lg border border-admin-border-strong px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
                 <Trash2 className="h-3.5 w-3.5" /> Delete
               </button>
             </div>

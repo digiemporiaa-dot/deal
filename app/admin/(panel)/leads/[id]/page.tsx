@@ -54,7 +54,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div>
-      <Link href="/admin/leads" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+      <Link href="/admin/leads" className="mb-4 inline-flex items-center gap-1 text-sm text-admin-text-muted hover:text-admin-text">
         <ArrowLeft className="h-4 w-4" /> Back to leads
       </Link>
       <PageHeader
@@ -66,7 +66,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-1">
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Details</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Details</h2>
             <dl className="space-y-2 text-sm">
               <Detail label="Phone" value={lead.phone} />
               <Detail label="Email" value={lead.email || "—"} />
@@ -91,10 +91,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <Detail label="Source" value={leadSourceLabel(lead.source)} />
             </dl>
             {lead.message && (
-              <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{lead.message}</div>
+              <div className="mt-4 rounded-lg bg-admin-bg p-3 text-sm text-admin-text">{lead.message}</div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
-              <a href={`tel:${lead.phone}`} className="inline-flex h-9 items-center rounded-lg border border-slate-300 px-3 text-sm font-medium hover:bg-slate-50">Call</a>
+              <a href={`tel:${lead.phone}`} className="inline-flex h-9 items-center rounded-lg border border-admin-border-strong px-3 text-sm font-medium hover:bg-admin-bg">Call</a>
               {lead.whatsapp && (
                 <a
                   href={buildWhatsAppLink(lead.whatsapp, `Hi ${lead.name}, thank you for your enquiry with Vacationdeal.`)}
@@ -111,25 +111,25 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
           {!ownLeadsOnly && (
             <Card className="p-5">
-              <h2 className="mb-3 font-semibold text-slate-900">Assigned to</h2>
+              <h2 className="mb-3 font-semibold text-admin-text">Assigned to</h2>
               {mayAssign ? (
                 <LeadAssignSelect leadId={lead.id} value={lead.assignedToId} members={members} className="w-full" />
               ) : (
-                <p className="text-sm font-medium text-slate-900">{lead.assignedTo?.name ?? "Unassigned"}</p>
+                <p className="text-sm font-medium text-admin-text">{lead.assignedTo?.name ?? "Unassigned"}</p>
               )}
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-admin-text-muted">
                 {lead.assignedTo ? `${lead.assignedTo.name} is responsible for this lead.` : "Nobody is responsible for this lead yet."}
               </p>
             </Card>
           )}
 
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Priority</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Priority</h2>
             <LeadPrioritySelect leadId={lead.id} value={lead.priority} />
           </Card>
 
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Next follow-up</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Next follow-up</h2>
             <LeadFollowUp leadId={lead.id} current={lead.nextFollowUpAt ? lead.nextFollowUpAt.toISOString() : null} />
           </Card>
 
@@ -137,7 +137,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               the visitor's first page view. */}
           {(lead.campaign || lead.medium || lead.referrer || lead.landingPage || lead.gclid || lead.fbclid) && (
             <Card className="p-5">
-              <h2 className="mb-3 font-semibold text-slate-900">Marketing attribution</h2>
+              <h2 className="mb-3 font-semibold text-admin-text">Marketing attribution</h2>
               <dl className="space-y-2 text-sm">
                 <Detail label="Channel" value={leadSourceLabel(lead.source)} />
                 <Detail label="Medium" value={lead.medium || "—"} />
@@ -153,12 +153,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
 
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Quotation</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Quotation</h2>
             <LeadDocumentButton leadId={lead.id} />
           </Card>
 
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Engagement</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Engagement</h2>
             <dl className="space-y-2 text-sm">
               <Detail label="Emails sent" value={String(emailCount)} />
               <Detail label="Calls logged" value={String(callCount)} />
@@ -169,12 +169,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
         <div className="space-y-6 lg:col-span-2">
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Send an email</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Send an email</h2>
             <LeadEmailForm leadId={lead.id} leadEmail={lead.email} />
           </Card>
 
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Activity timeline</h2>
+            <h2 className="mb-3 font-semibold text-admin-text">Activity timeline</h2>
             <LeadTimeline
               leadId={lead.id}
               items={lead.notes.map((n) => ({
@@ -198,8 +198,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="text-right font-medium text-slate-900">{value}</dd>
+      <dt className="text-admin-text-muted">{label}</dt>
+      <dd className="text-right font-medium text-admin-text">{value}</dd>
     </div>
   );
 }

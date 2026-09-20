@@ -130,7 +130,7 @@ export function Drawer({
     <div className="fixed inset-0 z-[120] flex justify-end" role="presentation">
       {/* The list stays visible behind a drawer — that is the point of one. */}
       <div
-        className="admin-animate-overlay absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+        className="admin-animate-overlay absolute inset-0 bg-admin-navy/40 backdrop-blur-[1px]"
         onClick={() => !busy && onClose()}
         aria-hidden
       />
@@ -213,7 +213,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-[130] flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
       <div
-        className="admin-animate-overlay fixed inset-0 bg-slate-900/50"
+        className="admin-animate-overlay fixed inset-0 bg-admin-navy/50"
         onClick={() => !busy && onClose()}
         aria-hidden
       />

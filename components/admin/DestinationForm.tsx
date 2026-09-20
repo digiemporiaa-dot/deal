@@ -62,8 +62,8 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 font-semibold text-slate-900">Basic information</h2>
+      <div className="rounded-2xl border border-admin bg-white p-6">
+        <h2 className="mb-4 font-semibold text-admin-text">Basic information</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><Label>Name *</Label><Input {...register("name", { required: "Name is required" })} /><FieldError message={errors.name?.message} /></div>
           <div><Label>Country *</Label><Input {...register("country", { required: "Country is required" })} /><FieldError message={errors.country?.message} /></div>
@@ -78,38 +78,38 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 font-semibold text-slate-900">Highlights</h2>
+      <div className="rounded-2xl border border-admin bg-white p-6">
+        <h2 className="mb-3 font-semibold text-admin-text">Highlights</h2>
         <div className="space-y-2">
           {highlights.fields.map((f, i) => (
             <div key={f.id} className="flex items-center gap-2">
               <Input {...register(`highlights.${i}.value`)} placeholder="e.g. World-class beaches" />
-              <button type="button" onClick={() => highlights.remove(i)} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => highlights.remove(i)} className="rounded-lg p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
             </div>
           ))}
           <button type="button" onClick={() => highlights.append({ value: "" })} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600"><Plus className="h-4 w-4" /> Add highlight</button>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 font-semibold text-slate-900">Gallery images</h2>
+      <div className="rounded-2xl border border-admin bg-white p-6">
+        <h2 className="mb-3 font-semibold text-admin-text">Gallery images</h2>
         <div className="space-y-3">
           {images.fields.map((f, i) => (
             <div key={f.id} className="flex items-center gap-2">
               <Input {...register(`images.${i}.url`)} placeholder="Image URL" />
               <Input {...register(`images.${i}.alt`)} placeholder="Alt text" />
-              <button type="button" onClick={() => images.remove(i)} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => images.remove(i)} className="rounded-lg p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
             </div>
           ))}
           <button type="button" onClick={() => images.append({ url: "", alt: "" })} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600"><Plus className="h-4 w-4" /> Add image</button>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 font-semibold text-slate-900">FAQs</h2>
+      <div className="rounded-2xl border border-admin bg-white p-6">
+        <h2 className="mb-3 font-semibold text-admin-text">FAQs</h2>
         <div className="space-y-4">
           {faqs.fields.map((f, i) => (
-            <div key={f.id} className="rounded-xl border border-slate-200 p-4">
+            <div key={f.id} className="rounded-xl border border-admin p-4">
               <div className="mb-2 flex justify-end">
                 <button type="button" onClick={() => faqs.remove(i)} className="inline-flex items-center gap-1 text-xs font-medium text-red-600"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
               </div>
@@ -121,13 +121,13 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 font-semibold text-slate-900">SEO & visibility</h2>
+      <div className="rounded-2xl border border-admin bg-white p-6">
+        <h2 className="mb-4 font-semibold text-admin-text">SEO & visibility</h2>
         <div className="grid grid-cols-1 gap-4">
           <div><Label>SEO title</Label><Input {...register("seoTitle")} /></div>
           <div><Label>Meta description</Label><Textarea rows={2} {...register("seoDescription")} /></div>
-          <label className="flex items-center gap-3"><input type="checkbox" {...register("isPublished")} className="h-5 w-5 rounded border-slate-300 text-brand-600" /> Published</label>
-          <label className="flex items-center gap-3"><input type="checkbox" {...register("isFeatured")} className="h-5 w-5 rounded border-slate-300 text-brand-600" /> Featured</label>
+          <label className="flex items-center gap-3"><input type="checkbox" {...register("isPublished")} className="h-5 w-5 rounded border-admin-border-strong text-brand-600" /> Published</label>
+          <label className="flex items-center gap-3"><input type="checkbox" {...register("isFeatured")} className="h-5 w-5 rounded border-admin-border-strong text-brand-600" /> Featured</label>
         </div>
       </div>
 

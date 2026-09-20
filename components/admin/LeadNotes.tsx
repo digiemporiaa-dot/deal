@@ -32,11 +32,11 @@ export function LeadNotes({ leadId, notes }: { leadId: string; notes: Note[] }) 
         </button>
       </form>
       <div className="space-y-3">
-        {notes.length === 0 && <p className="text-sm text-slate-400">No notes yet.</p>}
+        {notes.length === 0 && <p className="text-sm text-admin-text-subtle">No notes yet.</p>}
         {notes.map((n) => (
-          <div key={n.id} className="rounded-xl border border-slate-200 p-3">
-            <p className="text-sm text-slate-700">{n.body}</p>
-            <p className="mt-1 text-xs text-slate-400">{n.author || "Team"} · {new Date(n.createdAt).toLocaleString("en-IN")}</p>
+          <div key={n.id} className="rounded-xl border border-admin p-3">
+            <p className="text-sm text-admin-text">{n.body}</p>
+            <p className="mt-1 text-xs text-admin-text-subtle">{n.author || "Team"} · {new Date(n.createdAt).toLocaleString("en-IN")}</p>
           </div>
         ))}
       </div>

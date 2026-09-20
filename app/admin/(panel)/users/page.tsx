@@ -12,7 +12,7 @@ export default async function UsersPage() {
   await requirePermission("users:view");
 
   const session = await auth();
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, take: 300 });
   const role = session?.user?.role;
   const canManage = role === "SUPER_ADMIN" || role === "ADMIN";
 
@@ -32,7 +32,7 @@ export default async function UsersPage() {
         canManage={canManage}
       />
       {!canManage && (
-        <p className="mt-4 text-sm text-slate-500">Only Super Admins and Admins can add or change users.</p>
+        <p className="mt-4 text-sm text-admin-text-muted">Only Super Admins and Admins can add or change users.</p>
       )}
     </div>
   );

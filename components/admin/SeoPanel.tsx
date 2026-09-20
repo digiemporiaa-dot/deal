@@ -96,19 +96,19 @@ export function SeoPanel({
     <Card className="mt-6 p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-slate-900">Search engine settings</h2>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <h2 className="font-semibold text-admin-text">Search engine settings</h2>
+          <p className="mt-0.5 text-sm text-admin-text-muted">
             Leave a field empty to use the page&rsquo;s own title, description and image.
           </p>
         </div>
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+        <div className="flex gap-1 rounded-lg bg-admin-muted p-1">
           {TABS.map((name) => (
             <button
               key={name}
               type="button"
               onClick={() => setTab(name)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                tab === name ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                tab === name ? "bg-white text-admin-text shadow-sm" : "text-admin-text-muted hover:text-admin-text"
               }`}
             >
               {name}
@@ -122,7 +122,7 @@ export function SeoPanel({
           <div>
             <Label>
               SEO title{" "}
-              <span className={titleLength > 60 ? "text-amber-600" : "text-slate-400"}>
+              <span className={titleLength > 60 ? "text-amber-600" : "text-admin-text-subtle"}>
                 ({titleLength}/60)
               </span>
             </Label>
@@ -136,7 +136,7 @@ export function SeoPanel({
           <div>
             <Label>
               Meta description{" "}
-              <span className={descriptionLength > 160 ? "text-amber-600" : "text-slate-400"}>
+              <span className={descriptionLength > 160 ? "text-amber-600" : "text-admin-text-subtle"}>
                 ({descriptionLength}/160)
               </span>
             </Label>
@@ -191,15 +191,15 @@ export function SeoPanel({
           </div>
 
           {/* A rough preview of how the result will read in Google. */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="rounded-xl border border-admin bg-admin-bg p-4">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-admin-text-subtle">
               <Eye className="h-3.5 w-3.5" /> Search preview
             </p>
             <p className="truncate text-xs text-emerald-700">{previewPath || "/"}</p>
             <p className="truncate text-base text-blue-800">
               {values.seoTitle || "Your page title will appear here"}
             </p>
-            <p className="line-clamp-2 text-sm text-slate-600">
+            <p className="line-clamp-2 text-sm text-admin-text-muted">
               {values.seoDescription || "Your meta description will appear here."}
             </p>
           </div>
@@ -208,7 +208,7 @@ export function SeoPanel({
 
       {tab === "Social" && (
         <div className="space-y-4">
-          <p className="flex items-center gap-2 text-sm text-slate-500">
+          <p className="flex items-center gap-2 text-sm text-admin-text-muted">
             <Share2 className="h-4 w-4" /> How this page looks when someone shares the link.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -256,7 +256,7 @@ export function SeoPanel({
 
       {tab === "Advanced" && (
         <div className="space-y-4">
-          <p className="flex items-center gap-2 text-sm text-slate-500">
+          <p className="flex items-center gap-2 text-sm text-admin-text-muted">
             <Code2 className="h-4 w-4" /> Extra structured data, added alongside what the page
             already generates.
           </p>
@@ -277,7 +277,7 @@ export function SeoPanel({
               onChange={(e) => set("schemaJson", e.target.value)}
               placeholder={'{\n  "@context": "https://schema.org",\n  "@type": "Event",\n  "name": "…"\n}'}
             />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-admin-text-muted">
               Must be valid JSON. Only describe things that are actually visible on the page —
               misleading markup gets a site penalised.
             </p>
@@ -285,7 +285,7 @@ export function SeoPanel({
         </div>
       )}
 
-      <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
+      <div className="mt-5 flex items-center gap-3 border-t border-admin pt-4">
         <button
           type="button"
           onClick={save}
@@ -295,7 +295,7 @@ export function SeoPanel({
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           {saving ? "Saving…" : "Save SEO settings"}
         </button>
-        <p className="text-xs text-slate-500">Saved separately from the content above.</p>
+        <p className="text-xs text-admin-text-muted">Saved separately from the content above.</p>
       </div>
     </Card>
   );

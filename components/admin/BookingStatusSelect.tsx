@@ -19,7 +19,7 @@ export function BookingStatusSelect({ id, value }: { id: string; value: string }
         router.refresh();
         setPending(false);
       }}
-      className="h-9 rounded-lg border border-slate-300 px-2 text-sm focus:border-brand-500 focus:outline-none"
+      className="h-9 rounded-lg border border-admin-border-strong px-2 text-sm focus:border-brand-500 focus:outline-none"
     >
       {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
     </select>

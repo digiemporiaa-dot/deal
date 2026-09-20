@@ -43,8 +43,8 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
     <div className="space-y-6">
       {/* Leads */}
       <Card className="p-5">
-        <h2 className="font-semibold text-slate-900">Export leads</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <h2 className="font-semibold text-admin-text">Export leads</h2>
+        <p className="mt-1 text-sm text-admin-text-muted">
           Download enquiries with full follow-up history — open in Excel or Google Sheets.
         </p>
 
@@ -59,7 +59,7 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
               key={q.label}
               type="button"
               onClick={() => quick(q.days)}
-              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
+              className="rounded-full border border-admin-border-strong px-3 py-1 text-xs font-medium text-admin-text-muted hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
             >
               {q.label}
             </button>
@@ -105,7 +105,7 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
           </a>
           <a
             href={leadUrl("csv")}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong px-4 text-sm font-semibold text-admin-text hover:bg-admin-bg"
           >
             <FileText className="h-4 w-4" /> Download CSV
           </a>
@@ -114,16 +114,16 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
 
       {/* Other data */}
       <Card className="p-5">
-        <h2 className="font-semibold text-slate-900">Export other records</h2>
-        <p className="mt-1 text-sm text-slate-500">Complete lists — no date filter.</p>
+        <h2 className="font-semibold text-admin-text">Export other records</h2>
+        <p className="mt-1 text-sm text-admin-text-muted">Complete lists — no date filter.</p>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             { type: "bookings", label: "Bookings" },
             { type: "customers", label: "Customers" },
             { type: "packages", label: "Packages" },
           ].map((item) => (
-            <div key={item.type} className="rounded-xl border border-slate-200 p-4">
-              <p className="font-medium text-slate-900">{item.label}</p>
+            <div key={item.type} className="rounded-xl border border-admin p-4">
+              <p className="font-medium text-admin-text">{item.label}</p>
               <div className="mt-3 flex gap-2">
                 <a
                   href={`/api/admin/export/data?type=${item.type}&format=excel`}
@@ -133,7 +133,7 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
                 </a>
                 <a
                   href={`/api/admin/export/data?type=${item.type}&format=csv`}
-                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-admin-border-strong px-3 text-xs font-semibold text-admin-text hover:bg-admin-bg"
                 >
                   <FileText className="h-3.5 w-3.5" /> CSV
                 </a>
@@ -146,19 +146,19 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
       {/* Backup */}
       <Card className="p-5">
         <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-900 text-white">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-admin-navy text-white">
             <Database className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="font-semibold text-slate-900">Full data backup</h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <h2 className="font-semibold text-admin-text">Full data backup</h2>
+            <p className="mt-1 text-sm text-admin-text-muted">
               One file containing every package, page, blog, booking, customer, lead, quotation and
               invoice. Download this monthly and keep it somewhere safe — if anything ever goes wrong
               with the database, this is your safety net.
             </p>
             <a
               href="/api/admin/export/data?type=backup"
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-admin-navy px-4 text-sm font-semibold text-white hover:bg-admin-navy-soft"
             >
               <Download className="h-4 w-4" /> Download backup
             </a>

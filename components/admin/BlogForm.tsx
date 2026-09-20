@@ -64,7 +64,7 @@ export function BlogForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <div className="rounded-2xl border border-admin bg-white p-6">
         <div className="grid grid-cols-1 gap-4">
           <div><Label>Title *</Label><Input {...register("title", { required: "Title is required" })} /><FieldError message={errors.title?.message} /></div>
           <div><Label>Excerpt</Label><Textarea rows={2} {...register("excerpt")} placeholder="Short summary for listing cards" /></div>
@@ -76,8 +76,8 @@ export function BlogForm({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900">Meta</h2>
+        <div className="rounded-2xl border border-admin bg-white p-6 space-y-4">
+          <h2 className="font-semibold text-admin-text">Meta</h2>
           <div><Label>Cover image URL</Label><Input {...register("coverImage")} /></div>
           <div><Label>Category</Label>
             <Select {...register("categoryId")}>
@@ -88,9 +88,9 @@ export function BlogForm({
           <div><Label>Tags (comma-separated)</Label><Input {...register("tags")} placeholder="dubai, travel tips" /></div>
           <div><Label>Slug (optional)</Label><Input {...register("slug")} /></div>
 
-          <div className="border-t border-slate-100 pt-4">
-            <h3 className="mb-1 text-sm font-semibold text-slate-900">Related content</h3>
-            <p className="mb-3 text-xs text-slate-500">
+          <div className="border-t border-admin pt-4">
+            <h3 className="mb-1 text-sm font-semibold text-admin-text">Related content</h3>
+            <p className="mb-3 text-xs text-admin-text-muted">
               Link this post to a destination or package and it will appear on those pages, and
               they will appear here.
             </p>
@@ -117,8 +117,8 @@ export function BlogForm({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900">SEO & publishing</h2>
+        <div className="rounded-2xl border border-admin bg-white p-6 space-y-4">
+          <h2 className="font-semibold text-admin-text">SEO & publishing</h2>
           <div><Label>SEO title</Label><Input {...register("seoTitle")} /></div>
           <div><Label>Meta description</Label><Textarea rows={2} {...register("seoDescription")} /></div>
           <div><Label>Status</Label>
@@ -127,7 +127,7 @@ export function BlogForm({
               <option value="PUBLISHED">Published</option>
             </Select>
           </div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("featured")} className="h-4 w-4 rounded border-slate-300 text-brand-600" /> Featured post</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("featured")} className="h-4 w-4 rounded border-admin-border-strong text-brand-600" /> Featured post</label>
         </div>
       </div>
 

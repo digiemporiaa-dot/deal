@@ -80,7 +80,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   const tones: Record<ToastTone, string> = {
     success: "border-emerald-200 bg-emerald-50 text-emerald-900",
     error: "border-red-200 bg-red-50 text-red-900",
-    info: "border-slate-200 bg-white text-slate-900",
+    info: "border-admin bg-white text-admin-text",
   };
   const Icon = toast.tone === "success" ? CheckCircle2 : toast.tone === "error" ? AlertTriangle : Info;
 

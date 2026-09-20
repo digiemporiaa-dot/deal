@@ -31,18 +31,18 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
     if (ref.current) onChange(ref.current.innerHTML);
   };
 
-  const btn = "grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-200";
+  const btn = "grid h-8 w-8 place-items-center rounded-md text-admin-text-muted hover:bg-admin-muted";
 
   // Stops toolbar buttons from stealing the text selection in the editor.
   const keepSelection = (e: React.MouseEvent) => e.preventDefault();
 
   return (
-    <div className="rounded-lg border border-slate-300">
-      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-1.5">
+    <div className="rounded-lg border border-admin-border-strong">
+      <div className="flex flex-wrap items-center gap-1 border-b border-admin bg-admin-bg p-1.5">
         <button type="button" className={btn} onMouseDown={keepSelection} onClick={() => exec("bold")} title="Bold"><Bold className="h-4 w-4" /></button>
         <button type="button" className={btn} onMouseDown={keepSelection} onClick={() => exec("italic")} title="Italic"><Italic className="h-4 w-4" /></button>
         <select
-          className="h-8 rounded-md border border-slate-300 bg-white px-1.5 text-xs text-slate-700"
+          className="h-8 rounded-md border border-admin-border-strong bg-white px-1.5 text-xs text-admin-text"
           defaultValue=""
           title="Heading level"
           onChange={(e) => {
@@ -126,7 +126,7 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
         >
           <ImageIcon className="h-4 w-4" />
         </button>
-        <span className="mx-1 h-5 w-px bg-slate-300" />
+        <span className="mx-1 h-5 w-px bg-admin-border-strong" />
         <button type="button" className={btn} onMouseDown={keepSelection} onClick={() => exec("undo")} title="Undo"><Undo className="h-4 w-4" /></button>
         <button type="button" className={btn} onMouseDown={keepSelection} onClick={() => exec("redo")} title="Redo"><Redo className="h-4 w-4" /></button>
       </div>

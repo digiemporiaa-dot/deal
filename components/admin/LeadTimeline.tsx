@@ -18,7 +18,7 @@ export type TimelineItem = {
 };
 
 const META: Record<string, { label: string; Icon: typeof StickyNote; className: string }> = {
-  NOTE: { label: "Note", Icon: StickyNote, className: "bg-slate-100 text-slate-600" },
+  NOTE: { label: "Note", Icon: StickyNote, className: "bg-admin-muted text-admin-text-muted" },
   EMAIL: { label: "Email sent", Icon: Mail, className: "bg-brand-50 text-brand-600" },
   CALL: { label: "Call", Icon: Phone, className: "bg-emerald-50 text-emerald-600" },
   STATUS: { label: "Status", Icon: ArrowRightLeft, className: "bg-amber-50 text-amber-600" },
@@ -62,7 +62,7 @@ export function LeadTimeline({ leadId, items }: { leadId: string; items: Timelin
             type="button"
             onClick={() => submit("call")}
             disabled={pending !== null}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-admin-border-strong px-4 text-sm font-semibold text-admin-text hover:bg-admin-bg disabled:opacity-50"
           >
             {pending === "call" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />} Log a call
           </button>
@@ -70,20 +70,20 @@ export function LeadTimeline({ leadId, items }: { leadId: string; items: Timelin
       </div>
 
       <div className="space-y-3">
-        {items.length === 0 && <p className="text-sm text-slate-400">No activity yet. Everything your team does with this lead will appear here.</p>}
+        {items.length === 0 && <p className="text-sm text-admin-text-subtle">No activity yet. Everything your team does with this lead will appear here.</p>}
         {items.map((item) => {
           const meta = META[item.type] ?? META.NOTE;
           const Icon = meta.Icon;
           return (
-            <div key={item.id} className="flex gap-3 rounded-xl border border-slate-200 p-3">
+            <div key={item.id} className="flex gap-3 rounded-xl border border-admin p-3">
               <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${meta.className}`}>
                 <Icon className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{meta.label}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-admin-text-muted">{meta.label}</span>
                   {item.type === "EMAIL" && item.emailTo && (
-                    <span className="text-xs text-slate-400">to {item.emailTo}</span>
+                    <span className="text-xs text-admin-text-subtle">to {item.emailTo}</span>
                   )}
                   {item.type === "EMAIL" && !item.delivered && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
@@ -91,9 +91,9 @@ export function LeadTimeline({ leadId, items }: { leadId: string; items: Timelin
                     </span>
                   )}
                 </div>
-                {item.subject && <p className="mt-1 text-sm font-semibold text-slate-900">{item.subject}</p>}
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{item.body}</p>
-                <p className="mt-1 text-xs text-slate-400">
+                {item.subject && <p className="mt-1 text-sm font-semibold text-admin-text">{item.subject}</p>}
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-admin-text">{item.body}</p>
+                <p className="mt-1 text-xs text-admin-text-subtle">
                   {item.author || "Team"} · {new Date(item.createdAt).toLocaleString("en-IN")}
                 </p>
               </div>

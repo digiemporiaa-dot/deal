@@ -175,7 +175,7 @@ export function CommandPalette({
       aria-modal="true"
       aria-label="Search"
     >
-      <div className="admin-animate-overlay fixed inset-0 bg-slate-900/50" onClick={onClose} aria-hidden />
+      <div className="admin-animate-overlay fixed inset-0 bg-admin-navy/50" onClick={onClose} aria-hidden />
 
       <div
         className="admin-animate-pop relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-card border border-admin bg-admin-card shadow-2xl"
