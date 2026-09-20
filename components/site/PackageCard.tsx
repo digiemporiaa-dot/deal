@@ -26,7 +26,7 @@ export function PackageCard({ pkg }: { pkg: PackageCardData }) {
   return (
     <Link
       href={`/packages/${pkg.slug}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-lg"
+      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-lg"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
         {cover ? (

@@ -3,6 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 import { getPublishedDestinations } from "@/lib/services/catalog";
 import { DestinationCard } from "@/components/site/DestinationCard";
 import { SectionHeading } from "@/components/site/Section";
+import { Reveal, Stagger, StaggerItem, HoverLift } from "@/components/motion/Reveal";
 
 export async function generateMetadata({
   searchParams,
@@ -35,14 +36,16 @@ export default async function DestinationsPage({
 
   return (
     <div className="container-page py-14">
-      <SectionHeading
-        eyebrow="Explore the world"
-        title="Our Destinations"
-        subtitle="From tropical beaches to alpine peaks — find the perfect place for your next escape."
-      />
+      <Reveal>
+        <SectionHeading
+          eyebrow="Explore the world"
+          title="Our Destinations"
+          subtitle="From tropical beaches to alpine peaks — find the perfect place for your next escape."
+        />
+      </Reveal>
 
       {/* Filters */}
-      <div className="mb-8 flex flex-wrap gap-2">
+      <Reveal className="mb-8 flex flex-wrap gap-2" delay={0.08}>
         <FilterLink href="/destinations" active={!params.country && params.featured !== "1"}>
           All
         </FilterLink>
@@ -54,18 +57,22 @@ export default async function DestinationsPage({
             {c}
           </FilterLink>
         ))}
-      </div>
+      </Reveal>
 
       {destinations.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-500">
           No destinations found.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-5 md:grid-cols-3 lg:grid-cols-4">
+        <Stagger className="grid grid-cols-2 gap-5 md:grid-cols-3 lg:grid-cols-4">
           {destinations.map((d) => (
-            <DestinationCard key={d.id} destination={d} />
+            <StaggerItem key={d.id}>
+              <HoverLift lift={3}>
+                <DestinationCard destination={d} />
+              </HoverLift>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
     </div>
   );

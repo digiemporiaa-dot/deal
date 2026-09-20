@@ -7,6 +7,7 @@ import { faqSchema } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { logger } from "@/lib/logger";
 import { RenderNode, type RenderContext } from "@/components/builder/RenderNode";
+import { Reveal } from "@/components/motion/Reveal";
 import type { BuilderNode, PageDocument } from "@/lib/builder/schema";
 
 /**
@@ -169,9 +170,19 @@ export async function RenderDocument({
       {/* The id lets the editor preview replace this block wholesale. */}
       <style id="vd-builder-css" dangerouslySetInnerHTML={{ __html: css }} />
       {schema && <JsonLd data={schema} />}
-      {document.sections.map((section) => (
-        <RenderNode key={section.id} node={section} ctx={ctx} />
-      ))}
+      {document.sections.map((section, index) =>
+        // The first section is whatever sits at the top of the page: almost
+        // always the LCP element, and with no scroll for it to arrive on. It
+        // is left alone. Everything below it reveals like the rest of the
+        // site, so a page built in the builder feels like a coded one.
+        index === 0 ? (
+          <RenderNode key={section.id} node={section} ctx={ctx} />
+        ) : (
+          <Reveal key={section.id}>
+            <RenderNode node={section} ctx={ctx} />
+          </Reveal>
+        ),
+      )}
     </>
   );
 }

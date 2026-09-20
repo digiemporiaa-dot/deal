@@ -22,6 +22,8 @@ import { destinationEnquiryMessage } from "@/lib/whatsapp";
 import { parseList } from "@/lib/utils";
 import { getRelatedDestinations, getRelatedBlogs } from "@/lib/related";
 import { RelatedDestinations, RelatedBlogs } from "@/components/site/RelatedContent";
+import { Reveal, Stagger, StaggerItem, HoverLift } from "@/components/motion/Reveal";
+import { HeroBackdrop, HeroIntro, HeroLine } from "@/components/motion/Hero";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -80,24 +82,28 @@ export default async function DestinationDetail({ params }: Params) {
 
       {/* Hero */}
       <section className="relative isolate overflow-hidden">
-        {dest.coverImage && <Image src={dest.coverImage} alt={dest.name} fill priority className="-z-10 object-cover" />}
+        {dest.coverImage && (
+          <HeroBackdrop>
+            <Image src={dest.coverImage} alt={dest.name} fill priority className="object-cover" />
+          </HeroBackdrop>
+        )}
         <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-900/85 to-slate-900/30" />
-        <div className="container-page flex min-h-[55vh] flex-col justify-end py-16 text-white">
-          <p className="flex items-center gap-2 text-sm text-white/85">
+        <HeroIntro className="container-page flex min-h-[55vh] flex-col justify-end py-16 text-white">
+          <HeroLine as="p" className="flex items-center gap-2 text-sm text-white/85">
             <MapPin className="h-4 w-4" /> {dest.country}
             {dest.city ? ` · ${dest.city}` : ""}
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-bold sm:text-5xl">{dest.name}</h1>
-          <p className="mt-3 max-w-2xl text-lg text-white/85">{dest.shortDescription}</p>
-        </div>
+          </HeroLine>
+          <HeroLine as="h1" className="mt-2 font-display text-4xl font-bold text-white sm:text-5xl">{dest.name}</HeroLine>
+          <HeroLine as="p" className="mt-3 max-w-2xl text-lg text-white/85">{dest.shortDescription}</HeroLine>
+        </HeroIntro>
       </section>
 
       <div className="container-page grid grid-cols-1 gap-10 py-14 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="prose-content whitespace-pre-line">{dest.description}</div>
+          <Reveal className="prose-content whitespace-pre-line">{dest.description}</Reveal>
 
           {highlights.length > 0 && (
-            <div className="mt-8">
+            <Reveal className="mt-8">
               <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-slate-900">
                 <Sparkles className="h-5 w-5 text-brand-600" /> Highlights
               </h2>
@@ -108,16 +114,16 @@ export default async function DestinationDetail({ params }: Params) {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Reveal>
           )}
 
           {dest.bestTimeToVisit && (
-            <div className="mt-8 rounded-2xl border border-slate-200 p-6">
+            <Reveal className="mt-8 rounded-2xl border border-slate-200 p-6">
               <h3 className="flex items-center gap-2 font-semibold text-slate-900">
                 <CalendarDays className="h-5 w-5 text-brand-600" /> Best time to visit
               </h3>
               <p className="mt-2 text-slate-600">{dest.bestTimeToVisit}</p>
-            </div>
+            </Reveal>
           )}
         </div>
 
@@ -147,12 +153,18 @@ export default async function DestinationDetail({ params }: Params) {
       {dest.packages.length > 0 && (
         <section className="bg-slate-50 py-14">
           <div className="container-page">
-            <SectionHeading title={`Packages in ${dest.name}`} />
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <Reveal>
+              <SectionHeading title={`Packages in ${dest.name}`} />
+            </Reveal>
+            <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {dest.packages.map((p) => (
-                <PackageCard key={p.id} pkg={{ ...p, category: null }} />
+                <StaggerItem key={p.id} className="h-full">
+                  <HoverLift>
+                    <PackageCard pkg={{ ...p, category: null }} />
+                  </HoverLift>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           </div>
         </section>
       )}
@@ -160,8 +172,10 @@ export default async function DestinationDetail({ params }: Params) {
       {/* FAQs */}
       {dest.faqs.length > 0 && (
         <section className="container-page py-14">
-          <SectionHeading title="Frequently asked questions" />
-          <Faqs items={dest.faqs} />
+          <Reveal>
+            <SectionHeading title="Frequently asked questions" />
+            <Faqs items={dest.faqs} />
+          </Reveal>
         </section>
       )}
 

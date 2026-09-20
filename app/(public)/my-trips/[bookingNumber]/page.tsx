@@ -218,7 +218,7 @@ export default async function MyTripDetailPage({ params }: Props) {
 
       {/* Help */}
       <div className="mt-6 rounded-2xl bg-slate-900 p-6 text-center text-white">
-        <h2 className="font-display text-xl font-semibold">Need help with this trip?</h2>
+        <h2 className="font-display text-xl font-semibold text-white">Need help with this trip?</h2>
         <p className="mt-1 text-sm text-slate-300">Our team is here before, during and after your travel.</p>
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           {settings.phone && (

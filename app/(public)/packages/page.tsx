@@ -4,6 +4,7 @@ import { getPackages, getPackageCategories, getPublishedDestinations } from "@/l
 import { PackageCard } from "@/components/site/PackageCard";
 import { SectionHeading } from "@/components/site/Section";
 import { PackageFiltersBar } from "@/components/site/PackageFiltersBar";
+import { Reveal, Stagger, StaggerItem, HoverLift } from "@/components/motion/Reveal";
 
 /**
  * Filtered, sorted and searched variants of this listing are the classic
@@ -51,11 +52,13 @@ export default async function PackagesPage({
 
   return (
     <div className="container-page py-14">
-      <SectionHeading
-        eyebrow="Find your trip"
-        title="Holiday Packages"
-        subtitle="Search, filter and book the perfect getaway."
-      />
+      <Reveal>
+        <SectionHeading
+          eyebrow="Find your trip"
+          title="Holiday Packages"
+          subtitle="Search, filter and book the perfect getaway."
+        />
+      </Reveal>
 
       <PackageFiltersBar
         categories={categories.map((c) => ({ slug: c.slug, name: c.name }))}
@@ -70,11 +73,15 @@ export default async function PackagesPage({
           No packages match your filters. Try broadening your search.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {packages.map((p) => (
-            <PackageCard key={p.id} pkg={p} />
+            <StaggerItem key={p.id} className="h-full">
+              <HoverLift>
+                <PackageCard pkg={p} />
+              </HoverLift>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
     </div>
   );

@@ -28,7 +28,7 @@ export function DestinationCard({ destination }: { destination: DestinationCardD
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-5 text-white">
         <p className="text-xs uppercase tracking-wide text-white/80">{destination.country}</p>
-        <h3 className="mt-1 font-display text-xl font-semibold">{destination.name}</h3>
+        <h3 className="mt-1 font-display text-xl font-semibold text-white">{destination.name}</h3>
         {destination._count && (
           <p className="mt-1 text-sm text-white/85">{destination._count.packages} packages</p>
         )}

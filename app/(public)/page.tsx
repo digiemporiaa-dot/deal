@@ -368,7 +368,7 @@ export default async function HomePage() {
         <Reveal>
           <Spotlight className="overflow-hidden rounded-3xl">
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-600 to-brand-700 px-8 py-14 text-center text-white">
-              <h2 className="mx-auto max-w-2xl text-3xl font-bold sm:text-4xl">
+              <h2 className="mx-auto max-w-2xl text-3xl font-bold text-white sm:text-4xl">
                 Ready to start your next adventure?
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-white">

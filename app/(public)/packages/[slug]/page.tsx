@@ -26,6 +26,8 @@ import {
 import { packageEnquiryMessage } from "@/lib/whatsapp";
 import { getRelatedPackages, getRelatedDestinations, getRelatedBlogs } from "@/lib/related";
 import { RelatedPackages, RelatedDestinations, RelatedBlogs } from "@/components/site/RelatedContent";
+import { Reveal } from "@/components/motion/Reveal";
+import { HeroIntro, HeroLine } from "@/components/motion/Hero";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -130,13 +132,13 @@ export default async function PackageDetail({ params }: Params) {
 
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
+        <HeroIntro>
+          <HeroLine className="flex flex-wrap items-center gap-2">
             {pkg.category && <Badge tone="brand">{pkg.category.name}</Badge>}
             {pkg.featured && <Badge tone="amber"><Star className="mr-1 h-3 w-3 fill-current" />Featured</Badge>}
-          </div>
-          <h1 className="mt-2 font-display text-3xl font-bold text-slate-900 sm:text-4xl">{pkg.name}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-5 text-sm text-slate-600">
+          </HeroLine>
+          <HeroLine as="h1" className="mt-2 font-display text-3xl font-bold text-slate-900 sm:text-4xl">{pkg.name}</HeroLine>
+          <HeroLine className="mt-3 flex flex-wrap items-center gap-5 text-sm text-slate-600">
             <span className="inline-flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-brand-600" />
               <Link href={`/destinations/${pkg.destination.slug}`} className="hover:text-brand-600">
@@ -154,23 +156,25 @@ export default async function PackageDetail({ params }: Params) {
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {avgRating.toFixed(1)} ({pkg.reviews.length})
               </span>
             )}
-          </div>
-        </div>
+          </HeroLine>
+        </HeroIntro>
       </div>
 
-      <Gallery images={pkg.images} title={pkg.name} />
+      <Reveal>
+        <Gallery images={pkg.images} title={pkg.name} />
+      </Reveal>
 
       <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3">
         <div className="space-y-12 lg:col-span-2">
           {/* Overview */}
-          <section>
+          <Reveal as="section">
             <h2 className="mb-3 text-2xl font-bold text-slate-900">Overview</h2>
             <div className="prose-content whitespace-pre-line">{pkg.description}</div>
-          </section>
+          </Reveal>
 
           {/* Highlights */}
           {highlights.length > 0 && (
-            <section>
+            <Reveal as="section">
               <h2 className="mb-4 text-2xl font-bold text-slate-900">Highlights</h2>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {highlights.map((h, i) => (
@@ -179,20 +183,20 @@ export default async function PackageDetail({ params }: Params) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Reveal>
           )}
 
           {/* Itinerary */}
           {pkg.itinerary.length > 0 && (
-            <section>
+            <Reveal as="section">
               <h2 className="mb-5 text-2xl font-bold text-slate-900">Day-by-day itinerary</h2>
               <ItineraryTimeline days={pkg.itinerary} />
-            </section>
+            </Reveal>
           )}
 
           {/* Hotels */}
           {pkg.hotels.length > 0 && (
-            <section>
+            <Reveal as="section">
               <h2 className="mb-4 text-2xl font-bold text-slate-900">Hotels</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {pkg.hotels.map((h) => (
@@ -208,12 +212,12 @@ export default async function PackageDetail({ params }: Params) {
                   </div>
                 ))}
               </div>
-            </section>
+            </Reveal>
           )}
 
           {/* Inclusions / Exclusions */}
           {(pkg.inclusions.length > 0 || pkg.exclusions.length > 0) && (
-            <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <Reveal as="section" className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {pkg.inclusions.length > 0 && (
                 <div className="rounded-2xl border border-slate-200 p-6">
                   <h3 className="mb-4 text-lg font-semibold text-slate-900">What&apos;s included</h3>
@@ -238,12 +242,12 @@ export default async function PackageDetail({ params }: Params) {
                   </ul>
                 </div>
               )}
-            </section>
+            </Reveal>
           )}
 
           {/* Reviews */}
           {pkg.reviews.length > 0 && (
-            <section>
+            <Reveal as="section">
               <h2 className="mb-4 text-2xl font-bold text-slate-900">Traveller reviews</h2>
               <div className="space-y-4">
                 {pkg.reviews.map((r) => (
@@ -258,15 +262,15 @@ export default async function PackageDetail({ params }: Params) {
                   </div>
                 ))}
               </div>
-            </section>
+            </Reveal>
           )}
 
           {/* FAQs */}
           {pkg.faqs.length > 0 && (
-            <section>
+            <Reveal as="section">
               <h2 className="mb-4 text-2xl font-bold text-slate-900">Frequently asked questions</h2>
               <Faqs items={pkg.faqs} />
-            </section>
+            </Reveal>
           )}
         </div>
 

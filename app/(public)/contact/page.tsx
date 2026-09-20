@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 import { RenderDocument } from "@/components/builder/RenderDocument";
 import { cmsRoutePage } from "@/lib/builder/cms-route";
 import { SectionHeading } from "@/components/site/Section";
+import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { WhatsAppLink } from "@/components/site/WhatsAppLink";
 import { GENERAL_ENQUIRY_MESSAGE } from "@/lib/whatsapp";
@@ -54,25 +55,35 @@ export default async function ContactPage() {
 
   return (
     <div className="container-page py-14">
-      <SectionHeading eyebrow="We're here to help" title="Contact Us" subtitle="Reach out and our travel experts will get back to you within a few hours." />
+      <Reveal>
+        <SectionHeading eyebrow="We're here to help" title="Contact Us" subtitle="Reach out and our travel experts will get back to you within a few hours." />
+      </Reveal>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="space-y-4">
-          <ContactRow icon={<Phone className="h-5 w-5" />} label="Phone" value={settings.phone} />
-          <ContactRow icon={<Mail className="h-5 w-5" />} label="Email" value={settings.email} />
-          <ContactRow icon={<MapPin className="h-5 w-5" />} label="Address" value={settings.address} />
-          <ContactRow icon={<Clock className="h-5 w-5" />} label="Business hours" value={settings.businessHours} />
-          <div className="flex flex-wrap gap-3 pt-2">
+        <Stagger className="space-y-4">
+          <StaggerItem>
+            <ContactRow icon={<Phone className="h-5 w-5" />} label="Phone" value={settings.phone} />
+          </StaggerItem>
+          <StaggerItem>
+            <ContactRow icon={<Mail className="h-5 w-5" />} label="Email" value={settings.email} />
+          </StaggerItem>
+          <StaggerItem>
+            <ContactRow icon={<MapPin className="h-5 w-5" />} label="Address" value={settings.address} />
+          </StaggerItem>
+          <StaggerItem>
+            <ContactRow icon={<Clock className="h-5 w-5" />} label="Business hours" value={settings.businessHours} />
+          </StaggerItem>
+          <StaggerItem className="flex flex-wrap gap-3 pt-2">
             <EnquiryButton label="Send an Enquiry" title="Contact Us" source="contact-page" />
             <WhatsAppLink number={settings.whatsapp} message={GENERAL_ENQUIRY_MESSAGE} />
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8">
+          </StaggerItem>
+        </Stagger>
+        <Reveal className="rounded-2xl border border-slate-200 bg-slate-50 p-8" delay={0.1}>
           <h3 className="text-lg font-semibold text-slate-900">Request a callback</h3>
           <p className="mt-2 text-sm text-slate-600">
             Prefer we call you? Share your details and a travel expert will ring you back.
           </p>
           <EnquiryButton label="Request Callback" title="Request a Callback" source="contact-callback" className="mt-4 w-full" />
-        </div>
+        </Reveal>
       </div>
     </div>
   );

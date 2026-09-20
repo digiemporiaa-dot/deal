@@ -15,6 +15,8 @@ import {
 import { EnquiryButton } from "@/components/enquiry/EnquiryButton";
 import { getRelatedBlogs, getRelatedPackages, getRelatedDestinations } from "@/lib/related";
 import { RelatedBlogs, RelatedPackages, RelatedDestinations } from "@/components/site/RelatedContent";
+import { Reveal } from "@/components/motion/Reveal";
+import { HeroIntro, HeroLine } from "@/components/motion/Hero";
 import { parseList } from "@/lib/utils";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -96,30 +98,38 @@ export default async function BlogPostPage({ params }: Params) {
           ...extraSchema(overrides?.schemaJson),
         ]}
       />
-      {post.category && <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">{post.category.name}</p>}
-      <h1 className="mt-2 font-display text-4xl font-bold text-slate-900">{post.title}</h1>
-      <p className="mt-3 text-sm text-slate-500">
-        {post.author?.name} · {post.publishedAt ? formatDate(post.publishedAt) : ""}
-      </p>
-      {post.coverImage && (
-        <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-2xl bg-slate-100">
-          <Image src={post.coverImage} alt={post.title} fill priority sizes="(max-width:768px) 100vw, 768px" className="object-cover" />
-        </div>
-      )}
+      <HeroIntro>
+        {post.category && <HeroLine as="p" className="text-sm font-semibold uppercase tracking-wide text-brand-600">{post.category.name}</HeroLine>}
+        <HeroLine as="h1" className="mt-2 font-display text-4xl font-bold text-slate-900">{post.title}</HeroLine>
+        <HeroLine as="p" className="mt-3 text-sm text-slate-500">
+          {post.author?.name} · {post.publishedAt ? formatDate(post.publishedAt) : ""}
+        </HeroLine>
+        {post.coverImage && (
+          <HeroLine className="relative mt-6 aspect-[16/9] overflow-hidden rounded-2xl bg-slate-100">
+            <Image src={post.coverImage} alt={post.title} fill priority sizes="(max-width:768px) 100vw, 768px" className="object-cover" />
+          </HeroLine>
+        )}
+      </HeroIntro>
       <div className="prose-content mt-8" dangerouslySetInnerHTML={{ __html: post.content }} />
 
-      <div className="mt-12 rounded-2xl bg-brand-50 p-6 text-center">
+      <Reveal className="mt-12 rounded-2xl bg-brand-50 p-6 text-center">
         <h3 className="text-lg font-semibold text-slate-900">Inspired to travel?</h3>
         <p className="mt-1 text-sm text-slate-600">Let our experts plan your perfect trip.</p>
         <EnquiryButton label="Plan My Trip" title="Plan My Trip" className="mt-4" />
-      </div>
+      </Reveal>
 
-      <RelatedPackages
-        packages={relatedPackages}
-        title={post.destination ? `Packages in ${post.destination.name}` : "Packages you can book"}
-      />
-      <RelatedDestinations destinations={relatedDestinations} title="Where to go next" />
-      <RelatedBlogs posts={relatedPosts} title="More travel guides" />
+      <Reveal>
+        <RelatedPackages
+          packages={relatedPackages}
+          title={post.destination ? `Packages in ${post.destination.name}` : "Packages you can book"}
+        />
+      </Reveal>
+      <Reveal>
+        <RelatedDestinations destinations={relatedDestinations} title="Where to go next" />
+      </Reveal>
+      <Reveal>
+        <RelatedBlogs posts={relatedPosts} title="More travel guides" />
+      </Reveal>
     </article>
   );
 }
