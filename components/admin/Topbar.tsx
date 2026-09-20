@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { HelpCircle, Menu as MenuIcon, Plus, RefreshCw, Search } from "lucide-react";
+import { Menu as MenuIcon, Plus, RefreshCw, Search } from "lucide-react";
 import { Breadcrumbs } from "@/components/admin/ui";
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "@/components/admin/Menu";
 import { breadcrumbsFor } from "@/lib/admin-nav";
@@ -116,14 +116,6 @@ export function Topbar({
           <RefreshCw className="h-4 w-4" />
         </button>
 
-        <a
-          href="/admin/settings"
-          aria-label="Help and support"
-          title="Help & support"
-          className="admin-focus hidden rounded-control p-2 text-admin-text-muted hover:bg-admin-muted hover:text-admin-text sm:block"
-        >
-          <HelpCircle className="h-4 w-4" />
-        </a>
       </div>
     </header>
   );

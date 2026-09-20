@@ -7,16 +7,14 @@ import {
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
-  LifeBuoy,
   LogOut,
   Plane,
   Settings,
-  UserRound,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navigationFor, isNavItemActive, type NavGroup } from "@/lib/admin-nav";
-import { roleLabel } from "@/lib/permissions";
+import { canAccessSection, roleLabel } from "@/lib/permissions";
 
 /**
  * Dark navy sidebar.
@@ -168,13 +166,6 @@ export function Sidebar({
 
         {/* Footer */}
         <div className="shrink-0 border-t border-admin-navy-line p-2.5">
-          <SidebarLink
-            href="/admin/settings"
-            icon={<LifeBuoy className="h-[18px] w-[18px]" />}
-            label="Help & support"
-            collapsed={collapsed}
-            onNavigate={onMobileClose}
-          />
           <UserBlock
             name={userName}
             email={userEmail}
@@ -319,6 +310,7 @@ function UserBlock({
   collapsed: boolean;
   onNavigate: () => void;
 }) {
+  const canOpenSettings = canAccessSection(role, "settings");
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -351,29 +343,29 @@ function UserBlock({
           role="menu"
           className="admin-animate-pop absolute bottom-full left-0 z-10 mb-1.5 w-full min-w-[200px] overflow-hidden rounded-card border border-admin-navy-line bg-admin-navy-soft py-1 shadow-xl"
         >
-          <MenuRow
-            role="menuitem"
-            href="/admin/settings"
-            icon={<UserRound className="h-4 w-4" />}
-            onNavigate={() => {
-              setOpen(false);
-              onNavigate();
-            }}
-          >
-            Profile
-          </MenuRow>
-          <MenuRow
-            role="menuitem"
-            href="/admin/settings"
-            icon={<Settings className="h-4 w-4" />}
-            onNavigate={() => {
-              setOpen(false);
-              onNavigate();
-            }}
-          >
-            Account settings
-          </MenuRow>
+          <div className="px-3 py-2">
+            <p className="truncate text-[13px] font-semibold text-white">{name}</p>
+            <p className="truncate text-[11px] text-slate-400">{email || roleLabel(role)}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">
+              {roleLabel(role)}
+            </p>
+          </div>
           <hr className="my-1 border-admin-navy-line" />
+          {/* Settings is the only real destination here, and not every role
+              can open it — offering it to someone who would be bounced
+              straight back is worse than not offering it. */}
+          {canOpenSettings && (
+            <MenuRow
+              href="/admin/settings"
+              icon={<Settings className="h-4 w-4" />}
+              onNavigate={() => {
+                setOpen(false);
+                onNavigate();
+              }}
+            >
+              Settings
+            </MenuRow>
+          )}
           {/* A plain link, so signing out still works with JavaScript off. */}
           <a
             role="menuitem"
@@ -426,7 +418,6 @@ function MenuRow({
   icon: React.ReactNode;
   children: React.ReactNode;
   onNavigate: () => void;
-  role?: string;
 }) {
   return (
     <Link
