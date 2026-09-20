@@ -167,3 +167,38 @@ export function getBlogPostBySlug(slug: string) {
     },
   });
 }
+
+export type SiteStats = {
+  destinations: number;
+  packages: number;
+  /** Average published review score, or null when there are no reviews. */
+  rating: number | null;
+  reviews: number;
+};
+
+/**
+ * Headline numbers for the homepage.
+ *
+ * Every figure is a live count from the catalogue. Nothing here is a round
+ * marketing number: if the site has four destinations it says four, because a
+ * statistic that does not match what the visitor can then go and browse is
+ * worse than no statistic at all.
+ */
+export async function getSiteStats(): Promise<SiteStats> {
+  const [destinations, packages, reviews] = await Promise.all([
+    prisma.destination.count({ where: { isPublished: true } }),
+    prisma.travelPackage.count({ where: { published: true } }),
+    prisma.testimonial.aggregate({
+      where: { published: true },
+      _avg: { rating: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  return {
+    destinations,
+    packages,
+    rating: reviews._avg.rating ? Math.round(reviews._avg.rating * 10) / 10 : null,
+    reviews: reviews._count._all,
+  };
+}

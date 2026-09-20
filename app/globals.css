@@ -92,6 +92,29 @@
   }
 }
 
+/* ── Public site motion ───────────────────────────────────────────── */
+
+/*
+ * Safety net for animated content.
+ *
+ * Motion components start their children at opacity 0 and animate them in.
+ * That state is rendered into the server HTML, so a visitor whose JavaScript
+ * never arrives would otherwise get a page of invisible text. The matching
+ * <noscript> block in the public layout resets `data-motion` elements for
+ * that case; this rule covers the other one.
+ *
+ * Belt and braces alongside <MotionConfig reducedMotion="user">, which already
+ * turns transforms into instant cuts — this also covers the window before the
+ * runtime has hydrated, when the server's opacity:0 is still applied.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-motion] {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
 /* ── Admin chrome ─────────────────────────────────────────────────── */
 
 /* Sidebar and drawer scrollbars: a full-width bar next to a 264px nav looks
