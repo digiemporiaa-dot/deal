@@ -338,6 +338,7 @@ export const SECTION_PERMISSIONS: Record<string, Permission[]> = {
   dashboard: ["dashboard:view"],
   leads: ["leads:view"],
   bookings: ["bookings:view"],
+  payments: ["bookings:view"],
   customers: ["customers:view"],
   quotations: ["documents:view"],
   invoices: ["documents:view"],

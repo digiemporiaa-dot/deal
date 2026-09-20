@@ -321,6 +321,40 @@ export const leadQuerySchema = z.object({
 });
 export type LeadQuery = z.infer<typeof leadQuerySchema>;
 
+export const bookingQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: z.string().trim().max(40).optional(),
+  payment: z.string().trim().max(40).optional(),
+  destination: z.string().trim().max(60).optional(),
+  /** "1" restricts to trips that have not departed. */
+  upcoming: z.enum(["1"]).optional(),
+  from: dateString,
+  to: dateString,
+  sort: z.enum(["newest", "oldest", "travel", "amount"]).default("newest"),
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  perPage: z.coerce.number().int().min(1).max(200).default(25),
+});
+export type BookingQuery = z.infer<typeof bookingQuerySchema>;
+
+export const paymentQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: z.string().trim().max(40).optional(),
+  method: z.string().trim().max(40).optional(),
+  from: dateString,
+  to: dateString,
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  perPage: z.coerce.number().int().min(1).max(200).default(25),
+});
+export type PaymentQuery = z.infer<typeof paymentQuerySchema>;
+
+export const customerQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  sort: z.enum(["newest", "name", "spend", "bookings"]).default("newest"),
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  perPage: z.coerce.number().int().min(1).max(200).default(25),
+});
+export type CustomerQuery = z.infer<typeof customerQuerySchema>;
+
 export const activityQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   user: z.string().trim().max(60).optional(),
