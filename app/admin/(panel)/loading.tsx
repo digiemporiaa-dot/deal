@@ -1,14 +1,10 @@
-import { TableSkeleton } from "@/components/admin/ui";
+import { ListPageSkeleton } from "@/components/admin/skeletons";
 
-/** Shown while any admin page streams in, so navigation never looks stuck. */
+/**
+ * Fallback loading state for admin pages that do not define their own.
+ * Routes with a distinctive shape (the dashboard, the lists) supply a
+ * closer match in their own loading.tsx.
+ */
 export default function AdminLoading() {
-  return (
-    <div>
-      <div className="mb-6 space-y-2">
-        <div className="h-7 w-48 animate-pulse rounded bg-slate-200" />
-        <div className="h-4 w-72 animate-pulse rounded bg-admin-muted" />
-      </div>
-      <TableSkeleton rows={8} />
-    </div>
-  );
+  return <ListPageSkeleton filters={3} rows={8} />;
 }

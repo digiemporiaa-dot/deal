@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { CalendarClock, Flame, Loader2, Mail, MessageCircle, Phone, X } from "lucide-react";
 import {
   Avatar,
@@ -18,6 +18,7 @@ import {
 import { Select } from "@/components/ui/Field";
 import { useToast } from "@/components/admin/Toast";
 import { LeadDrawer } from "@/components/admin/LeadDrawer";
+import { useRowDrawer } from "@/components/admin/RowDrawerTable";
 import { LEAD_STATUSES, leadStatusLabel, leadSourceLabel } from "@/lib/crm";
 import { leadStatusTone, priorityTone, humanStatus } from "@/lib/admin-status";
 import { bulkUpdateLeadStatus, bulkAssignLeads } from "@/app/admin/(panel)/leads/actions";
@@ -70,27 +71,15 @@ export function LeadTable({
   canAssign: boolean;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const toast = useToast();
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [pending, setPending] = React.useState(false);
 
-  // The open lead is URL state, so Back closes the drawer and the link is
-  // shareable — the dashboard and global search both link straight to it.
-  const openLeadId = searchParams.get("lead");
-
-  const setOpenLead = React.useCallback(
-    (id: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (id) params.set("lead", id);
-      else params.delete("lead");
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams],
-  );
+  // The open lead is mirrored into the URL, so Back closes the drawer and the
+  // link is shareable — the dashboard and global search both link straight to
+  // a lead.
+  const { openId: openLeadId, setOpenId: setOpenLead } = useRowDrawer("lead");
 
   const allSelected = leads.length > 0 && selected.size === leads.length;
 

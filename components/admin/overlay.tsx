@@ -120,10 +120,13 @@ export function Drawer({
 
   if (!mounted || !open) return null;
 
+  // Full-bleed on a phone, a panel from 640px up. The panel stays under
+  // ~560px so the list behind it is still readable — a drawer that covers
+  // half the screen may as well have been a page.
   const widths = {
-    sm: "sm:max-w-md",
-    md: "sm:max-w-lg",
-    lg: "sm:max-w-2xl",
+    sm: "sm:max-w-[420px]",
+    md: "sm:max-w-[480px]",
+    lg: "sm:max-w-[560px]",
   };
 
   return createPortal(

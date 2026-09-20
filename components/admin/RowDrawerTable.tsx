@@ -1,35 +1,69 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 /**
- * Keeps "which row is open" in the URL.
+ * Keeps "which row is open" in the URL, without a server round-trip.
  *
- * Both the bookings and customers tables open a drawer on row click, and both
- * want the same behaviour: Back closes it, and the address can be shared or
- * linked to from search. That logic is identical in each, so it lives here
- * once rather than being copied into both tables.
+ * Three tables open a preview drawer on row click and all want the same
+ * behaviour, so the logic lives here once rather than being copied into each.
+ *
+ * The open id is held in React state and mirrored into the address bar with
+ * the native history API. That matters: routing through `router.replace`
+ * would re-run the page on the server and the drawer could not appear until
+ * that returned — a visible delay for a panel whose whole point is to be
+ * quicker than navigating, and a dead click if the request is superseded.
+ * Nothing about the list changes when a preview opens, so re-rendering it
+ * server-side buys nothing.
+ *
+ * Opening pushes a history entry so Back closes the drawer; closing replaces
+ * it, so repeatedly opening and closing does not fill the history.
  */
 export function useRowDrawer(param: string) {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const fromUrl = searchParams.get(param);
 
-  const openId = searchParams.get(param);
+  const [openId, setOpenId] = React.useState<string | null>(fromUrl);
 
-  const setOpenId = React.useCallback(
+  // What this hook last wrote to the address bar. `useSearchParams` does not
+  // always reflect a native history write, so the sync below has to tell
+  // "the URL changed under us" apart from "we changed it".
+  const written = React.useRef<string | null>(fromUrl);
+
+  React.useEffect(() => {
+    if (fromUrl !== written.current) {
+      written.current = fromUrl;
+      setOpenId(fromUrl);
+    }
+  }, [fromUrl]);
+
+  // Back and Forward move between "open" and "closed".
+  React.useEffect(() => {
+    const onPopState = () => {
+      const current = new URLSearchParams(window.location.search).get(param);
+      written.current = current;
+      setOpenId(current);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [param]);
+
+  const open = React.useCallback(
     (id: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (id) params.set(param, id);
-      else params.delete(param);
-      const query = params.toString();
-      // `replace` rather than `push`: opening and closing a preview should not
-      // fill the history with entries for the same list.
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      setOpenId(id);
+      written.current = id;
+
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set(param, id);
+      else url.searchParams.delete(param);
+
+      // Opening is a place you can come back from; closing is not.
+      if (id) window.history.pushState(null, "", url);
+      else window.history.replaceState(null, "", url);
     },
-    [param, pathname, router, searchParams],
+    [param],
   );
 
-  return { openId, setOpenId };
+  return { openId, setOpenId: open };
 }

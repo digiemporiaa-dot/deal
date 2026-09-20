@@ -20,7 +20,7 @@ export default function AdminError({
   }, [error]);
 
   return (
-    <div className="rounded-2xl border border-red-200 bg-red-50 p-10 text-center">
+    <div className="rounded-card border border-red-200 bg-red-50 p-10 text-center">
       <AlertTriangle className="mx-auto h-8 w-8 text-red-500" />
       <h1 className="mt-3 text-lg font-semibold text-red-900">This page could not be loaded</h1>
       <p className="mx-auto mt-2 max-w-md text-sm text-red-700">
@@ -33,7 +33,7 @@ export default function AdminError({
       <button
         type="button"
         onClick={reset}
-        className="mt-6 inline-flex h-10 items-center gap-2 rounded-lg bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-700"
+        className="admin-focus mt-6 inline-flex h-10 items-center gap-2 rounded-control bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-700"
       >
         <RotateCw className="h-4 w-4" /> Try again
       </button>
