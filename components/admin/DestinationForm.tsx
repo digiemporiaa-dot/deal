@@ -52,8 +52,9 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
     };
     const res: ActionResult = destinationId ? await updateDestination(destinationId, payload) : await createDestination(payload);
     if (res.ok) {
+      // A push already fetches the destination from the server; refreshing
+      // on top of it cancels the navigation in flight.
       router.push("/admin/destinations");
-      router.refresh();
     } else {
       setError(res.error);
       setSubmitting(false);

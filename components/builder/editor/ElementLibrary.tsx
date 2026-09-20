@@ -9,7 +9,7 @@ import {
   type ElementCategory,
   type ElementDef,
 } from "@/lib/builder/registry";
-import { getIcon } from "@/components/builder/icons";
+import { getElementIcon } from "@/components/builder/editor/element-icons";
 
 /**
  * The left panel: every element that can be added, plus saved templates and
@@ -44,7 +44,7 @@ function DraggableElement({
     id: `new:${def.type}`,
     data: { newType: def.type },
   });
-  const Icon = getIcon(def.icon);
+  const Icon = getElementIcon(def.icon);
 
   return (
     <button

@@ -58,7 +58,11 @@ export function BlogForm({
       destinationId: v.destinationId, packageId: v.packageId,
     };
     const res: ActionResult = await saveBlog(payload, blogId);
-    if (res.ok) { router.push("/admin/blogs"); router.refresh(); }
+    if (res.ok) {
+      // A push already fetches the destination; refreshing on top of it
+      // cancels the navigation in flight.
+      router.push("/admin/blogs");
+    }
     else { setError(res.error); setSubmitting(false); }
   };
 

@@ -83,8 +83,9 @@ export function NewLeadButton({
       toast.success("Lead added.");
       setOpen(false);
       // Land straight in the new lead's drawer, ready to log the call.
+      // No refresh after this: a push already fetches the page from the
+      // server, and a refresh on top of it cancels the navigation.
       router.push(`/admin/leads?lead=${result.id}`);
-      router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

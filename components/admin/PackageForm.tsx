@@ -124,8 +124,9 @@ export function PackageForm({
       : await createPackage(payload);
 
     if (result.ok) {
+      // A push already fetches the destination from the server; refreshing
+      // on top of it cancels the navigation in flight.
       router.push("/admin/packages");
-      router.refresh();
     } else {
       setError(result.error);
       setSubmitting(false);

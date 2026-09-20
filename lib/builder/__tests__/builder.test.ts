@@ -714,6 +714,28 @@ describe("builtInTemplates", () => {
   });
 });
 
+describe("element icons", () => {
+  it("has an icon for every element type", async () => {
+    // Without this the library renders a wall of identical placeholder tiles,
+    // which is exactly as useful as no icons at all.
+    const { ELEMENT_ICONS } = await import("@/components/builder/editor/element-icons");
+    for (const type of ELEMENT_TYPES) {
+      const def = getElementDef(type)!;
+      expect(ELEMENT_ICONS, `${type} → ${def.icon}`).toHaveProperty(def.icon);
+    }
+  });
+
+  it("does not carry icons nothing uses", async () => {
+    const { ELEMENT_ICONS } = await import("@/components/builder/editor/element-icons");
+    const used = new Set(ELEMENT_TYPES.map((type) => getElementDef(type)!.icon));
+    // `Sparkles` is the fallback, so it is allowed to be unused by a type.
+    const extra = Object.keys(ELEMENT_ICONS).filter(
+      (name) => !used.has(name) && name !== "Sparkles",
+    );
+    expect(extra).toEqual([]);
+  });
+});
+
 describe("route rules", () => {
   it("reserves the slugs a static route already owns", () => {
     expect(isReservedSlug("packages")).toBe(true);

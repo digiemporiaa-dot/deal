@@ -325,7 +325,13 @@ export function PageBuilder({
       onDragEnd={onDragEnd}
       onDragCancel={() => setDragging(null)}
     >
-      <div className="fixed inset-0 z-40 flex flex-col bg-slate-100">
+      {/*
+        The builder is a full-screen workspace, so it has to sit above the
+        admin shell — the sidebar is z-50 and would otherwise cover the
+        element library. Its own dialogs (media picker, page settings) are
+        z-[120] and up, so they still open over this.
+      */}
+      <div className="fixed inset-0 z-[100] flex flex-col bg-admin-muted">
         {/* Toolbar */}
         <header className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
           <a

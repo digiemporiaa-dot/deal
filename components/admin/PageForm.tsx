@@ -52,7 +52,11 @@ export function PageForm({
       ogImage: v.ogImage, faqs: v.faqs,
     };
     const res: ActionResult = await savePage(payload, pageId);
-    if (res.ok) { router.push("/admin/pages"); router.refresh(); }
+    if (res.ok) {
+      // A push already fetches the destination; refreshing on top of it
+      // cancels the navigation in flight.
+      router.push("/admin/pages");
+    }
     else { setError(res.error); setSubmitting(false); }
   };
 

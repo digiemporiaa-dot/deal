@@ -58,9 +58,9 @@ function useDialog(open: boolean, onClose: () => void, locked?: boolean) {
       if (event.key !== "Tab" || !panelRef.current) return;
 
       // Trap Tab inside the dialog.
-      const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (element) => element.offsetParent !== null,
-      );
+      const items = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((element) => element.offsetParent !== null);
       if (items.length === 0) return;
 
       const firstItem = items[0]!;
@@ -154,10 +154,17 @@ export function Drawer({
           <div className="min-w-0 flex-1">
             {header ?? (
               <>
-                <h2 id={titleId} className="truncate font-display text-lg font-bold text-admin-text">
+                <h2
+                  id={titleId}
+                  className="truncate font-display text-lg font-bold text-admin-text"
+                >
                   {title}
                 </h2>
-                {subtitle && <p className="mt-0.5 truncate text-sm text-admin-text-muted">{subtitle}</p>}
+                {subtitle && (
+                  <p className="mt-0.5 truncate text-sm text-admin-text-muted">
+                    {subtitle}
+                  </p>
+                )}
               </>
             )}
             {header && (
@@ -176,9 +183,15 @@ export function Drawer({
           </button>
         </div>
 
-        <div className="admin-scroll min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="admin-scroll min-h-0 flex-1 overflow-y-auto">
+          {children}
+        </div>
 
-        {footer && <div className="border-t border-admin bg-admin-bg px-5 py-3">{footer}</div>}
+        {footer && (
+          <div className="border-t border-admin bg-admin-bg px-5 py-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,
@@ -214,44 +227,57 @@ export function Modal({
   const sizes = { sm: "max-w-sm", md: "max-w-md", lg: "max-w-xl" };
 
   return createPortal(
-    <div className="fixed inset-0 z-[130] flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
+    // The scrolling element and the centring element have to be different.
+    // Centring with flex *on* the scroll container clips whatever overflows
+    // above the centre line, which puts a tall form's submit button out of
+    // reach — `min-h-full` on an inner flex keeps it centred while letting
+    // the outer element scroll.
+    <div className="fixed inset-0 z-[130] overflow-y-auto">
       <div
         className="admin-animate-overlay fixed inset-0 bg-admin-navy/50"
         onClick={() => !busy && onClose()}
         aria-hidden
       />
 
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        className={cn(
-          "admin-animate-pop relative w-full rounded-t-card bg-admin-card p-5 shadow-2xl outline-none sm:rounded-card",
-          sizes[size],
-        )}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 id={titleId} className="font-semibold text-admin-text">
-              {title}
-            </h2>
-            {description && <p className="mt-1 text-sm text-admin-text-muted">{description}</p>}
+      <div className="relative flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          className={cn(
+            "admin-animate-pop relative w-full rounded-t-card bg-admin-card p-5 shadow-2xl outline-none sm:rounded-card",
+            sizes[size],
+          )}
+        >
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id={titleId} className="font-semibold text-admin-text">
+                {title}
+              </h2>
+              {description && (
+                <p className="mt-1 text-sm text-admin-text-muted">
+                  {description}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="admin-focus -mr-1 -mt-1 shrink-0 rounded-control p-1.5 text-admin-text-subtle hover:bg-admin-muted hover:text-admin-text"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="admin-focus -mr-1 -mt-1 shrink-0 rounded-control p-1.5 text-admin-text-subtle hover:bg-admin-muted hover:text-admin-text"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
+          {children}
+
+          {footer && (
+            <div className="mt-5 flex justify-end gap-2">{footer}</div>
+          )}
         </div>
-
-        {children}
-
-        {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>,
     document.body,

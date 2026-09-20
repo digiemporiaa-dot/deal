@@ -100,8 +100,9 @@ export function DocumentForm({ initial, statuses }: { initial: DocumentFormValue
       setPending(false);
       return;
     }
+    // A push already fetches the destination from the server; refreshing on
+    // top of it cancels the navigation in flight.
     router.push(`/admin/${isInvoice ? "invoices" : "quotations"}/${res.id}`);
-    router.refresh();
     setPending(false);
   };
 

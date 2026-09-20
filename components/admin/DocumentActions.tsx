@@ -52,8 +52,9 @@ export function DocumentActions({
     if (!confirm("Delete this document permanently?")) return;
     setBusy("delete");
     await deleteDocument(id);
+    // A push already fetches the destination from the server; refreshing on
+    // top of it cancels the navigation in flight.
     router.push(`/admin/${isInvoice ? "invoices" : "quotations"}`);
-    router.refresh();
   };
 
   return (

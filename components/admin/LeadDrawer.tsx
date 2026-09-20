@@ -577,16 +577,23 @@ function Activity({ lead, busy, run }: { lead: LeadDetail; busy: boolean; run: R
     <div className="space-y-5">
       {lead.can.update && (
         <div className="rounded-card border border-admin bg-admin-bg p-3.5">
-          <div className="mb-2 flex gap-1">
+          {/*
+            These pick what kind of entry this is; the button below performs
+            it. They are named for the kind rather than the action so that two
+            controls do not answer to "Add note" — which is confusing to look
+            at and ambiguous to anyone navigating by accessible name.
+          */}
+          <div role="group" aria-label="Entry type" className="mb-2 flex gap-1">
             {(
               [
-                ["note", "Add note", <StickyNote key="n" className="h-3 w-3" />],
-                ["call", "Log a call", <Phone key="c" className="h-3 w-3" />],
+                ["note", "Note", <StickyNote key="n" className="h-3 w-3" />],
+                ["call", "Call", <Phone key="c" className="h-3 w-3" />],
               ] as const
             ).map(([value, label, icon]) => (
               <button
                 key={value}
                 type="button"
+                aria-pressed={kind === value}
                 onClick={() => setKind(value)}
                 className={cn(
                   "admin-focus inline-flex items-center gap-1.5 rounded-chip px-2.5 py-1 text-[11px] font-semibold",
