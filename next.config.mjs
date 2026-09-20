@@ -47,6 +47,16 @@ const nextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      // Uploaded media carries a timestamp and a random suffix in its name, so
+      // a given URL always refers to the same bytes. Without this, files that
+      // existed when the server booted are served by Next's static handler
+      // with max-age=0 while files uploaded since are served by the /uploads
+      // route as immutable — the same image cached differently depending on
+      // when it arrived, which is confusing and needlessly chatty.
+      {
+        source: "/uploads/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       { source: "/admin/:path*", headers: [noIndexHeader] },
       { source: "/api/:path*", headers: [noIndexHeader] },
       { source: "/my-trips/:path*", headers: [noIndexHeader] },

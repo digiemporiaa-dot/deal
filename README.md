@@ -175,10 +175,40 @@ Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `ADMIN
 3. Use a managed Postgres (Neon/Supabase/Vercel Postgres) for `DATABASE_URL`.
 4. Build command `npm run build`; the Prisma client is generated automatically.
 5. Run `npm run prisma:deploy` against the production DB (e.g. as a release step), then `npm run db:seed` once if you want demo data.
-6. For media uploads in production, set `STORAGE_DRIVER` to `vercel-blob` (with `BLOB_READ_WRITE_TOKEN`) or `s3` (with the `S3_*` variables) — local `/public/uploads` is wiped on every deploy and is for development only.
+6. For media uploads, set `STORAGE_DRIVER` to `vercel-blob` (with `BLOB_READ_WRITE_TOKEN`) or `s3` (with the `S3_*` variables). Local disk is not an option here: the filesystem is reset on every deploy and is not shared between instances.
 7. Set `CRON_SECRET`; `/api/cron/crm` refuses to run in production without it. The schedule is already declared in `vercel.json`.
 
-**Any Node host**: `npm run build` then `npm run start` behind a reverse proxy, with `DATABASE_URL` reachable.
+**VPS (Ubuntu/Debian, Node + nginx)**
+1. `npm ci && npm run build`, then run `npm run start` under a process manager (systemd, PM2) behind nginx.
+2. Point `DATABASE_URL` at Postgres on the same box or a managed one, and set `NEXTAUTH_URL` / `NEXT_PUBLIC_SITE_URL` to the real https:// address.
+3. **Media can stay on the VPS** — that is the default. Keep `STORAGE_DRIVER="local"` and put the files outside the application directory:
+
+   ```bash
+   sudo mkdir -p /var/www/vacationdeal-uploads
+   sudo chown -R $USER /var/www/vacationdeal-uploads   # the user Node runs as
+   # in .env:
+   UPLOAD_DIR="/var/www/vacationdeal-uploads"
+   ```
+
+   Anything under the app directory is destroyed by the deployment styles that replace it wholesale (a Docker rebuild, `output: "standalone"`, `rsync --delete`, swapping a release directory), and uploads are the one thing in there that cannot be rebuilt from git. Image URLs stay `/uploads/<folder>/<file>` whichever directory is used, so moving it later only means moving the files.
+
+4. Optional — let nginx serve the images directly, so Node is not woken for a static file:
+
+   ```nginx
+   location /uploads/ {
+       alias /var/www/vacationdeal-uploads/;
+       access_log off;
+       expires 1y;
+       add_header Cache-Control "public, immutable";
+       try_files $uri =404;
+   }
+   ```
+
+   Without this the app serves them itself, correctly — the `alias` is a performance choice, not a requirement.
+
+5. Back up the upload directory alongside the database. `pg_dump` alone will leave you with rows pointing at images that no longer exist.
+
+**Any other Node host**: `npm run build` then `npm run start` behind a reverse proxy, with `DATABASE_URL` reachable.
 
 ---
 

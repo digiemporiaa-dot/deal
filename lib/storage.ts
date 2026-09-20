@@ -11,12 +11,26 @@ import { AppError } from "@/lib/errors";
  * Business code calls `uploadFile` / `deleteFile` / `getFileUrl` and never
  * learns where the bytes went. The driver is chosen by STORAGE_DRIVER:
  *
- *   local        files under /public/uploads — the default, for development
+ *   local        files on this machine's own disk — the default
  *   vercel-blob  Vercel Blob, via BLOB_READ_WRITE_TOKEN
  *   s3           any S3-compatible bucket, including Cloudflare R2
  *
- * Local storage is not durable on serverless hosts — the filesystem is reset
- * on every deploy — so production should set one of the other two.
+ * Local storage is a real option on a VPS, where the disk survives restarts.
+ * It is not an option on a serverless host, where the filesystem is reset on
+ * every deploy and is not shared between instances — there, use one of the
+ * other two.
+ *
+ * Where "local" writes is set by UPLOAD_DIR:
+ *
+ *   unset                 <app>/public/uploads, served by Next's own static
+ *                         handler. Zero configuration, and the default.
+ *   /var/www/uploads      any absolute path, served by app/uploads/[...path].
+ *
+ * Pointing UPLOAD_DIR outside the application directory is what makes local
+ * storage survive a deploy. Anything under the app directory is destroyed by
+ * the deployment styles that replace it wholesale — a Docker image rebuild,
+ * `output: "standalone"`, an rsync with --delete, a release-directory swap —
+ * and uploads are the one thing in there that cannot be rebuilt from git.
  */
 
 export type StorageProvider = "local" | "vercel-blob" | "s3";
@@ -113,28 +127,80 @@ function inferProvider(url: string): StorageProvider {
 
 /* ─────────────────────────── local ─────────────────────────── */
 
-const UPLOAD_ROOT = () => path.join(process.cwd(), "public", "uploads");
+/** Where the "local" driver keeps its files. Absolute, and never traversed into. */
+export function uploadRoot(): string {
+  const configured = (process.env.UPLOAD_DIR || "").trim();
+  if (configured) return path.resolve(configured);
+  return path.join(process.cwd(), "public", "uploads");
+}
+
+/**
+ * True when uploads live inside `public/`, where Next's static handler serves
+ * them directly. The serving route checks this and stands aside, so the same
+ * bytes are never reachable through two different code paths.
+ */
+export function uploadsArePublic(): boolean {
+  const publicDir = path.join(process.cwd(), "public");
+  const root = uploadRoot();
+  return root === publicDir || root.startsWith(publicDir + path.sep);
+}
+
+/**
+ * Resolve a request path like "packages/photo-x1y2.jpg" to a file on disk.
+ *
+ * Returns null rather than throwing for anything that escapes the root, so a
+ * caller can answer 404 without distinguishing "missing" from "not allowed" —
+ * the difference is only useful to someone probing.
+ */
+export function resolveUploadPath(relative: string): string | null {
+  // Reject before touching the filesystem: encoded traversal, absolute paths,
+  // Windows separators, NUL bytes, and dotfiles.
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(relative);
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!decoded || decoded.includes("\0") || decoded.includes("\\")) return null;
+  if (decoded.startsWith("/") || /^[a-z]:/i.test(decoded)) return null;
+  if (decoded.split("/").some((segment) => segment === ".." || segment.startsWith("."))) return null;
+
+  const root = uploadRoot();
+  const target = path.resolve(root, decoded);
+
+  // `path.resolve` collapses "..", so this catches anything the checks above
+  // missed — including a segment that only becomes traversal after decoding.
+  if (target !== root && !target.startsWith(root + path.sep)) return null;
+
+  return target;
+}
 
 async function uploadToLocal(input: UploadInput, folder: string): Promise<StoredFile> {
-  const dir = path.join(UPLOAD_ROOT(), folder);
+  const root = uploadRoot();
+  const dir = path.join(root, folder);
   await mkdir(dir, { recursive: true });
 
   const target = path.join(dir, input.filename);
   // Defence in depth: refuse anything that resolves outside the upload root.
-  if (!target.startsWith(UPLOAD_ROOT() + path.sep)) {
+  if (!target.startsWith(root + path.sep)) {
     throw new AppError("VALIDATION", "That file name is not allowed.");
   }
 
   await writeFile(target, input.buffer);
+
+  // The URL shape does not depend on where the bytes live, so moving
+  // UPLOAD_DIR does not invalidate rows that were stored before the move.
   const url = `/uploads/${folder}/${input.filename}`;
   return { url, key: url, provider: "local" };
 }
 
 async function deleteFromLocal(key: string): Promise<void> {
   const relative = key.replace(/^\/?uploads\//, "");
-  if (!relative || relative.includes("..")) return;
-  const target = path.join(UPLOAD_ROOT(), relative);
-  if (!target.startsWith(UPLOAD_ROOT() + path.sep)) return;
+  if (!relative) return;
+  const target = resolveUploadPath(relative);
+  if (!target) return;
   await unlink(target).catch(() => undefined);
 }
 
