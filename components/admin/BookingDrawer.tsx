@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   CreditCard,
-  ExternalLink,
   Loader2,
   Mail,
   MapPin,
@@ -26,6 +25,7 @@ import {
   Td,
   buttonClasses,
 } from "@/components/admin/ui";
+import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { Tabs } from "@/components/admin/Tabs";
 import { Select } from "@/components/ui/Field";
 import { useToast } from "@/components/admin/Toast";
@@ -165,10 +165,7 @@ export function BookingDrawer({
                 </span>
               )}
             </span>
-            <Link href={`/admin/bookings?booking=${booking.id}`} className={buttonClasses("ghost", "sm")}>
-              Permalink
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
+            <CopyLinkButton path={`/admin/bookings?booking=${booking.id}`} label="Copy link" />
           </div>
         )
       }

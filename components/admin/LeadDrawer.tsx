@@ -7,7 +7,7 @@ import {
   ArrowRightLeft,
   CalendarClock,
   Check,
-  ExternalLink,
+  ArrowRight,
   Loader2,
   Mail,
   MessageCircle,
@@ -146,7 +146,7 @@ export function LeadDrawer({ leadId, onClose }: { leadId: string | null; onClose
               className={buttonClasses("ghost", "sm")}
             >
               Open full record
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
             <span className="text-[11px] text-admin-text-subtle">
               Enquiry received {formatDate(lead.createdAt)}
