@@ -7,6 +7,7 @@ import { saveSeoPanel } from "@/app/admin/(panel)/seo/actions";
 import { Input, Textarea, Label, Select } from "@/components/ui/Field";
 import { Card } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/Toast";
+import { ImageInput } from "@/components/admin/ImageInput";
 
 export type SeoPanelValues = {
   seoTitle: string;
@@ -217,10 +218,11 @@ export function SeoPanel({
               <Input value={values.ogTitle} onChange={(e) => set("ogTitle", e.target.value)} />
             </div>
             <div>
-              <Label>Share image URL</Label>
-              <Input
+              <Label>Share image</Label>
+              <ImageInput
                 value={values.ogImage}
-                onChange={(e) => set("ogImage", e.target.value)}
+                onChange={(url) => set("ogImage", url)}
+                folder="social"
                 placeholder="/uploads/… or https://…  (1200×630 works best)"
               />
             </div>
@@ -239,8 +241,12 @@ export function SeoPanel({
               <Input value={values.twitterTitle} onChange={(e) => set("twitterTitle", e.target.value)} />
             </div>
             <div>
-              <Label>X (Twitter) image URL</Label>
-              <Input value={values.twitterImage} onChange={(e) => set("twitterImage", e.target.value)} />
+              <Label>X (Twitter) image</Label>
+              <ImageInput
+                value={values.twitterImage}
+                onChange={(url) => set("twitterImage", url)}
+                folder="social"
+              />
             </div>
           </div>
           <div>

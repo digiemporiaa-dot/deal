@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray, type Control, type UseFormRegister } from "react-hook-form";
+import { useForm, useFieldArray, Controller, type Control, type UseFormRegister } from "react-hook-form";
 import { Plus, Trash2, Loader2, GripVertical } from "lucide-react";
 import { Input, Textarea, Select, Label, FieldError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ImageInput } from "@/components/admin/ImageInput";
 import type { PackageInput } from "@/lib/validation";
 import { createPackage, updatePackage, type ActionResult } from "@/app/admin/(panel)/packages/actions";
 
@@ -63,7 +64,7 @@ export function PackageForm({
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { register, control, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       name: "", slug: "", destinationId: "", categoryId: "", shortDescription: "", description: "",
       durationDays: 5, durationNights: 4, startingPrice: 0, discountPrice: undefined, currency: "INR",
@@ -246,15 +247,28 @@ export function PackageForm({
 
         {/* Images */}
         <Section show={tab === "Images"} tab="Images">
-          <RepeaterHeader title="Gallery images" hint="Paste image URLs. First image is the cover." />
+          <RepeaterHeader title="Gallery images" hint="Upload or choose from the media library. The first image is the cover." />
           <ObjectRepeater
             control={control}
             name="images"
             empty={{ url: "", alt: "" }}
             addLabel="Add image"
             render={(index) => (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Input {...register(`images.${index}.url`)} placeholder="https://…/image.jpg" />
+              <div className="space-y-3">
+                <Controller
+                  control={control}
+                  name={`images.${index}.url`}
+                  render={({ field }) => (
+                    <ImageInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      folder="packages"
+                      // Picking an image brings its alt text with it, so the
+                      // one field most often left blank arrives filled in.
+                      onPicked={(media) => media.alt && setValue(`images.${index}.alt`, media.alt)}
+                    />
+                  )}
+                />
                 <Input {...register(`images.${index}.alt`)} placeholder="Alt text (accessibility/SEO)" />
               </div>
             )}

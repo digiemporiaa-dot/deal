@@ -6,6 +6,7 @@ import { toSafeError, AppError } from "@/lib/errors";
 import { limitFor } from "@/lib/rate-limit";
 import { readImageMeta, safeFilename } from "@/lib/image-meta";
 import { uploadFile } from "@/lib/storage";
+import { fetchRemoteImage } from "@/lib/fetch-image";
 import { mediaQuerySchema } from "@/lib/validation";
 import type { Prisma } from "@prisma/client";
 
@@ -22,6 +23,13 @@ const MAX_SIZE = 8 * 1024 * 1024;
  * name is generated, and the extension comes from the detected format. That
  * closes off executable uploads, `shell.php.jpg`, path traversal and SVGs
  * carrying script.
+ *
+ * Bytes arrive one of two ways: a `file` the admin chose, or a `url` for this
+ * server to download — which is how an image already hosted somewhere else is
+ * brought onto this machine. Both meet at the same magic-byte check and the
+ * same storage call, so an imported image is stored exactly like an uploaded
+ * one. The download itself is guarded in `lib/fetch-image.ts`, because a URL
+ * the caller picks is an SSRF risk before it is anything else.
  */
 export async function POST(request: Request) {
   try {
@@ -37,20 +45,30 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get("file");
-    if (!(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: "No file provided" }, { status: 400 });
-    }
-    if (file.size === 0) {
-      return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
-    }
-    if (file.size > MAX_SIZE) {
-      return NextResponse.json(
-        { ok: false, error: "File too large (maximum 8MB)." },
-        { status: 413 },
-      );
-    }
+    const sourceUrl = String(formData.get("url") || "").trim();
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    let buffer: Buffer;
+    let originalName: string;
+
+    if (file instanceof File) {
+      if (file.size === 0) {
+        return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
+      }
+      if (file.size > MAX_SIZE) {
+        return NextResponse.json(
+          { ok: false, error: "File too large (maximum 8MB)." },
+          { status: 413 },
+        );
+      }
+      buffer = Buffer.from(await file.arrayBuffer());
+      originalName = String(file.name || "");
+    } else if (sourceUrl) {
+      const fetched = await fetchRemoteImage(sourceUrl, MAX_SIZE);
+      buffer = fetched.buffer;
+      originalName = fetched.filename;
+    } else {
+      return NextResponse.json({ ok: false, error: "No file or URL provided" }, { status: 400 });
+    }
 
     // The only check that decides whether this is an image.
     const meta = readImageMeta(buffer);
@@ -67,7 +85,7 @@ export async function POST(request: Request) {
     const folderInput = String(formData.get("folder") || "general");
     const folder = folderInput.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60) || "general";
 
-    const filename = safeFilename(file.name || "image", meta.extension);
+    const filename = safeFilename(originalName || "image", meta.extension);
     const stored = await uploadFile({
       buffer,
       filename,
@@ -79,7 +97,7 @@ export async function POST(request: Request) {
       data: {
         url: stored.url,
         filename,
-        originalFilename: String(file.name || "").slice(0, 200) || null,
+        originalFilename: originalName.slice(0, 200) || null,
         mimeType: meta.mimeType,
         size: buffer.byteLength,
         width: meta.width,
@@ -98,12 +116,13 @@ export async function POST(request: Request) {
       action: "UPLOAD",
       entity: "Media",
       entityId: media.id,
-      description: `Uploaded ${filename}`,
+      description: sourceUrl ? `Imported ${filename} from a URL` : `Uploaded ${filename}`,
       metadata: {
         folder,
         mimeType: meta.mimeType,
         size: buffer.byteLength,
         provider: stored.provider,
+        ...(sourceUrl ? { sourceUrl } : {}),
       },
     });
 

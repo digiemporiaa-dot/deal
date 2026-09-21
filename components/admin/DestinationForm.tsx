@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray , Controller } from "react-hook-form";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Input, Textarea, Label, FieldError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ImageInput } from "@/components/admin/ImageInput";
 import type { DestinationInput } from "@/lib/validation";
 import { createDestination, updateDestination, type ActionResult } from "@/app/admin/(panel)/destinations/actions";
 
@@ -24,7 +25,7 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { register, control, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       name: "", slug: "", country: "", state: "", city: "", shortDescription: "", description: "",
       coverImage: "", bestTimeToVisit: "", travelInformation: "", isFeatured: false, isPublished: true,
@@ -72,7 +73,16 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
           <div><Label>City</Label><Input {...register("city")} /></div>
           <div className="sm:col-span-2"><Label>Short description *</Label><Input {...register("shortDescription", { required: true })} /></div>
           <div className="sm:col-span-2"><Label>Description *</Label><Textarea rows={5} {...register("description", { required: true })} /></div>
-          <div className="sm:col-span-2"><Label>Cover image URL</Label><Input {...register("coverImage")} placeholder="https://…" /></div>
+          <div className="sm:col-span-2">
+            <Label>Cover image</Label>
+            <Controller
+              control={control}
+              name="coverImage"
+              render={({ field }) => (
+                <ImageInput value={field.value} onChange={field.onChange} folder="destinations" />
+              )}
+            />
+          </div>
           <div><Label>Best time to visit</Label><Input {...register("bestTimeToVisit")} /></div>
           <div><Label>Slug (optional)</Label><Input {...register("slug")} /></div>
           <div className="sm:col-span-2"><Label>Travel information</Label><Textarea rows={3} {...register("travelInformation")} /></div>
@@ -96,9 +106,24 @@ export function DestinationForm({ initial, destinationId }: { initial?: Partial<
         <h2 className="mb-3 font-semibold text-admin-text">Gallery images</h2>
         <div className="space-y-3">
           {images.fields.map((f, i) => (
-            <div key={f.id} className="flex items-center gap-2">
-              <Input {...register(`images.${i}.url`)} placeholder="Image URL" />
-              <Input {...register(`images.${i}.alt`)} placeholder="Alt text" />
+            <div key={f.id} className="flex items-start gap-2">
+              <div className="flex-1 space-y-2">
+                <Controller
+                  control={control}
+                  name={`images.${i}.url`}
+                  render={({ field }) => (
+                    <ImageInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      folder="destinations"
+                      // Picking an image brings its alt text with it, so the
+                      // one field most often left blank arrives filled in.
+                      onPicked={(media) => media.alt && setValue(`images.${i}.alt`, media.alt)}
+                    />
+                  )}
+                />
+                <Input {...register(`images.${i}.alt`)} placeholder="Alt text" />
+              </div>
               <button type="button" onClick={() => images.remove(i)} className="rounded-lg p-2 text-admin-text-subtle hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
             </div>
           ))}

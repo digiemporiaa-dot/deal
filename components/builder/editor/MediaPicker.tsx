@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { ImageIcon, Loader2, Search, Upload, X, AlertTriangle } from "lucide-react";
+import { ImageIcon, Link2, Loader2, Search, Upload, X, AlertTriangle } from "lucide-react";
 
 /**
  * Media library picker.
@@ -35,15 +35,21 @@ export function MediaPicker({
   open,
   onClose,
   onSelect,
+  folder = "pages",
 }: {
   open: boolean;
   onClose: () => void;
   onSelect: (media: PickedMedia) => void;
+  /** Library folder new uploads land in, so a destination photo does not
+      end up filed under "pages". */
+  folder?: string;
 }) {
   const [items, setItems] = React.useState<MediaRow[]>([]);
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
+  const [importing, setImporting] = React.useState(false);
+  const [importUrl, setImportUrl] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [mounted, setMounted] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -93,7 +99,7 @@ export function MediaPicker({
     try {
       const form = new FormData();
       form.append("file", files[0]!);
-      form.append("folder", "pages");
+      form.append("folder", folder);
       const response = await fetch("/api/media", { method: "POST", body: form });
       const data = await response.json();
       if (data.ok) {
@@ -106,6 +112,33 @@ export function MediaPicker({
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  // Pull an image that lives on someone else's server onto this one. The
+  // server does the download so the file ends up in the library like any
+  // other upload, rather than the site linking out to a host it does not own.
+  const importFromUrl = async () => {
+    const value = importUrl.trim();
+    if (!value) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("url", value);
+      form.append("folder", folder);
+      const response = await fetch("/api/media", { method: "POST", body: form });
+      const data = await response.json();
+      if (data.ok) {
+        setItems((current) => [data.media, ...current]);
+        setImportUrl("");
+      } else {
+        setError(data.error || "That image could not be imported.");
+      }
+    } catch {
+      setError("That image could not be imported.");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -152,6 +185,31 @@ export function MediaPicker({
           />
           <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1.5 hover:bg-slate-100">
             <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+          <Link2 className="h-4 w-4 shrink-0 text-slate-400" />
+          <input
+            value={importUrl}
+            onChange={(event) => setImportUrl(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void importFromUrl();
+              }
+            }}
+            placeholder="Paste an image URL to copy it onto this server"
+            className="h-9 flex-1 rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => void importFromUrl()}
+            disabled={importing || !importUrl.trim()}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Import
           </button>
         </div>
 

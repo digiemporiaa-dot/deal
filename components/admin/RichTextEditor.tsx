@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Bold, Italic, List, ListOrdered, Link2, Image as ImageIcon, Undo, Redo } from "lucide-react";
+import { MediaPicker } from "@/components/builder/editor/MediaPicker";
 
 /**
  * Lightweight rich-text editor built on a contentEditable surface. It emits
@@ -12,6 +13,13 @@ import { Bold, Italic, List, ListOrdered, Link2, Image as ImageIcon, Undo, Redo 
 export function RichTextEditor({ value, onChange }: { value: string; onChange: (html: string) => void }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [ready, setReady] = React.useState(false);
+  const [picking, setPicking] = React.useState(false);
+
+  // Where the caret was when the image button was pressed. A modal takes the
+  // selection with it, so the range has to be captured before it opens and
+  // restored before the image is inserted — otherwise the picture lands
+  // wherever the browser last had focus, which is not where the writer was.
+  const savedRange = React.useRef<Range | null>(null);
 
   // Initialise once (avoids clobbering the caret on every keystroke).
   React.useEffect(() => {
@@ -110,17 +118,11 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
           onMouseDown={keepSelection}
           onClick={() => {
             const selection = window.getSelection();
-            const savedRange =
+            savedRange.current =
               selection && selection.rangeCount > 0 && ref.current?.contains(selection.anchorNode)
                 ? selection.getRangeAt(0).cloneRange()
                 : null;
-            const url = prompt("Enter image URL");
-            if (!url) return;
-            if (savedRange && selection) {
-              selection.removeAllRanges();
-              selection.addRange(savedRange);
-            }
-            exec("insertImage", url);
+            setPicking(true);
           }}
           title="Insert image"
         >
@@ -136,6 +138,19 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
         suppressContentEditableWarning
         onInput={onInput}
         className="prose-content min-h-[240px] max-w-none px-4 py-3 text-sm focus:outline-none"
+      />
+      <MediaPicker
+        open={picking}
+        onClose={() => setPicking(false)}
+        folder="content"
+        onSelect={(media) => {
+          const selection = window.getSelection();
+          if (savedRange.current && selection) {
+            selection.removeAllRanges();
+            selection.addRange(savedRange.current);
+          }
+          exec("insertImage", media.url);
+        }}
       />
     </div>
   );

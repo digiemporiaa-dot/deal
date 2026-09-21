@@ -6,6 +6,7 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { Loader2, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { Input, Textarea, Label, Select, FieldError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ImageInput } from "@/components/admin/ImageInput";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { savePage, type ActionResult, type PageInput } from "@/app/admin/(panel)/pages/actions";
 import { PagePreviewLink } from "@/components/admin/PagePreviewLink";
@@ -157,7 +158,17 @@ export function PageForm({
           <h2 className="font-semibold text-admin-text">SEO</h2>
           <div><Label>SEO title</Label><Input {...register("seoTitle")} /></div>
           <div><Label>Meta description</Label><Textarea rows={2} {...register("seoDescription")} /></div>
-          <div><Label>Featured / OG image URL (optional)</Label><Input {...register("ogImage")} placeholder="https://…/image.jpg" /><p className="mt-1 text-xs text-admin-text-muted">Shown when the page is shared on WhatsApp, Facebook, etc. Recommended size 1200×630.</p></div>
+          <div>
+            <Label>Featured / OG image (optional)</Label>
+            <Controller
+              control={control}
+              name="ogImage"
+              render={({ field }) => (
+                <ImageInput value={field.value} onChange={field.onChange} folder="pages" />
+              )}
+            />
+            <p className="mt-1 text-xs text-admin-text-muted">Shown when the page is shared on WhatsApp, Facebook, etc. Recommended size 1200×630.</p>
+          </div>
         </div>
       </div>
 

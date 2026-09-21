@@ -208,6 +208,14 @@ Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `ADMIN
 
 5. Back up the upload directory alongside the database. `pg_dump` alone will leave you with rows pointing at images that no longer exist.
 
+### Getting images into that directory
+
+Every admin form that holds a picture — destination cover and gallery, package gallery, blog cover, page OG image, the SEO share images, and images inside the rich-text editor — has a **Library** button next to it. It opens the media library, where an image can be uploaded from the machine you are sitting at or chosen from what is already there. Either way the bytes are written to `UPLOAD_DIR` and the field records a `/uploads/…` address, so the picture is served from this server.
+
+The URL box beside the button still accepts a pasted link, because existing content holds them and they must keep working. A link is not stored locally, though: the site will be showing an image from someone else's server, which can change or disappear without notice.
+
+To bring such an image across, paste it into the **"Paste an image URL to copy it onto this server"** box at the top of the media library and press Import. The server downloads it once and stores it like any upload. That request is guarded (`lib/fetch-image.ts`): http and https only, the resolved address is checked against the private, loopback, link-local and cloud-metadata ranges, redirects are refused rather than followed, and the response is capped and timed out — a URL an admin types is otherwise a way to make this server fetch things on the caller's behalf.
+
 **Any other Node host**: `npm run build` then `npm run start` behind a reverse proxy, with `DATABASE_URL` reachable.
 
 ---

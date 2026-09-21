@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 import { Input, Textarea, Label, Select, FieldError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
+import { ImageInput } from "@/components/admin/ImageInput";
 import type { BlogInput } from "@/lib/validation";
 import { saveBlog, type ActionResult } from "@/app/admin/(panel)/blogs/actions";
 
@@ -38,7 +39,7 @@ export function BlogForm({
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       title: "", slug: "", excerpt: "", coverImage: "", categoryId: "", status: "DRAFT",
       featured: false, tags: "", seoTitle: "", seoDescription: "",
@@ -82,7 +83,16 @@ export function BlogForm({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-admin bg-white p-6 space-y-4">
           <h2 className="font-semibold text-admin-text">Meta</h2>
-          <div><Label>Cover image URL</Label><Input {...register("coverImage")} /></div>
+          <div>
+            <Label>Cover image</Label>
+            <Controller
+              control={control}
+              name="coverImage"
+              render={({ field }) => (
+                <ImageInput value={field.value} onChange={field.onChange} folder="blog" />
+              )}
+            />
+          </div>
           <div><Label>Category</Label>
             <Select {...register("categoryId")}>
               <option value="">None</option>
