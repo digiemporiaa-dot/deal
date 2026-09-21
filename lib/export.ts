@@ -49,6 +49,8 @@ export function toExcel(title: string, headers: string[], rows: unknown[][]): st
 
 export function exportFileName(base: string, format: string): string {
   const stamp = new Date().toISOString().slice(0, 10);
+  // "excel" is the only format whose name differs from its extension; csv,
+  // json, pdf and zip are already their own suffix.
   return `${base}-${stamp}.${format === "excel" ? "xls" : format}`;
 }
 

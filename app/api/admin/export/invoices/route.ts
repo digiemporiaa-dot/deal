@@ -7,6 +7,9 @@ import { limitFor } from "@/lib/rate-limit";
 import { toCsv, toExcel, exportFileName, EXPORT_CONTENT_TYPE } from "@/lib/export";
 import { computeTotals, DOC_LABEL, DOC_STATUSES, type DocKind } from "@/lib/documents";
 import { toNumber } from "@/lib/utils";
+import { getSettings } from "@/lib/settings";
+import { renderDocumentsPdf, renderDocumentPdf, type PdfDocumentData } from "@/lib/document-pdf";
+import JSZip from "jszip";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,7 +22,11 @@ export const maxDuration = 60;
  *   ?to=YYYY-MM-DD            issued on or before this date, inclusive
  *   ?status=PAID|…            one status, or every status when omitted
  *   ?detail=summary|items     one row per document, or one row per line
- *   ?format=csv|excel
+ *   ?format=csv|excel|pdf|zip
+ *
+ * `pdf` is every matching document in one file, a page each — what you print
+ * or file for a quarter. `zip` is the same documents as separate PDFs named
+ * by their number, for an accounts system that wants them one per record.
  *
  * Behind `documents:export` rather than `export:data`: this is every
  * customer's name, contact details and what they paid, which is a narrower
@@ -63,7 +70,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const kind: DocKind = url.searchParams.get("kind") === "QUOTATION" ? "QUOTATION" : "INVOICE";
-  const format = url.searchParams.get("format") === "excel" ? "excel" : "csv";
+  const formatParam = url.searchParams.get("format") || "csv";
+  const format = ["csv", "excel", "pdf", "zip"].includes(formatParam) ? formatParam : "csv";
   const detail = url.searchParams.get("detail") === "items" ? "items" : "summary";
   const from = parseDate(url.searchParams.get("from"));
   const to = parseDate(url.searchParams.get("to"), true);
@@ -91,6 +99,104 @@ export async function GET(request: Request) {
   });
 
   const label = DOC_LABEL[kind];
+
+  /* ---------------- The documents themselves ---------------- */
+  if (format === "pdf" || format === "zip") {
+    const settings = await getSettings();
+    const brand = {
+      siteName: settings.siteName,
+      address: settings.address,
+      phone: settings.phone,
+      email: settings.email,
+    };
+
+    const toPdfData = (doc: (typeof documents)[number]): PdfDocumentData => ({
+      kind: doc.kind,
+      number: doc.number,
+      status: doc.status,
+      createdAt: doc.createdAt,
+      dueDate: doc.dueDate,
+      validUntil: doc.validUntil,
+      customerName: doc.customerName,
+      customerEmail: doc.customerEmail,
+      customerPhone: doc.customerPhone,
+      billingAddress: doc.billingAddress,
+      title: doc.title,
+      destination: doc.destination,
+      travelDate: doc.travelDate,
+      travellers: doc.travellers,
+      currency: doc.currency,
+      discount: toNumber(doc.discount),
+      taxPercent: toNumber(doc.taxPercent),
+      amountPaid: toNumber(doc.amountPaid),
+      notes: doc.notes,
+      terms: doc.terms,
+      items: doc.items.map((item) => ({
+        title: item.title,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: toNumber(item.unitPrice),
+      })),
+    });
+
+    await recordActivity({
+      actor,
+      action: "EXPORT",
+      entity: "SalesDocument",
+      description: `Downloaded ${documents.length} ${label.many.toLowerCase()} as ${format.toUpperCase()}`,
+      metadata: {
+        kind, format, count: documents.length,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        status: status ?? "all",
+      },
+    });
+
+    const rangeLabel = [
+      from ? from.toISOString().slice(0, 10) : "",
+      to ? to.toISOString().slice(0, 10) : "",
+    ].filter(Boolean).join("-to-");
+    const fileBase = [label.many.toLowerCase(), rangeLabel].filter(Boolean).join("-");
+
+    if (format === "pdf") {
+      const pdf = await renderDocumentsPdf(documents.map(toPdfData), brand);
+      return new NextResponse(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${exportFileName(fileBase, "pdf")}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    const zip = new JSZip();
+    const used = new Set<string>();
+    for (const doc of documents) {
+      const pdf = await renderDocumentPdf(toPdfData(doc), brand);
+      // The number is unique in the database, but it reaches a filesystem
+      // here, so it is stripped to safe characters — and a collision after
+      // stripping gets a suffix rather than silently overwriting a file.
+      let name = doc.number.replace(/[^A-Za-z0-9._-]/g, "_") || "document";
+      if (used.has(name)) {
+        let n = 2;
+        while (used.has(`${name}-${n}`)) n += 1;
+        name = `${name}-${n}`;
+      }
+      used.add(name);
+      zip.file(`${name}.pdf`, pdf);
+    }
+
+    const archive = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    return new NextResponse(new Uint8Array(archive), {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${exportFileName(fileBase, "zip")}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  /* ---------------- Spreadsheet ---------------- */
   const headers =
     detail === "items"
       ? [

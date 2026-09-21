@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Download, ChevronDown } from "lucide-react";
+import { Download, ChevronDown, FileText, FileArchive } from "lucide-react";
 import { Label, Select, controlClasses } from "@/components/ui/Field";
 import { buttonClasses } from "@/components/admin/ui";
 import { DOC_LABEL, DOC_STATUSES, type DocKind } from "@/lib/documents-shared";
@@ -103,6 +103,7 @@ export function DocumentExport({ kind }: { kind: DocKind }) {
                 <option value="summary">One row per {label.one.toLowerCase()}</option>
                 <option value="items">One row per line item</option>
               </Select>
+              <p className="mt-1 text-[11px] text-admin-text-subtle">Spreadsheets only.</p>
             </div>
           </div>
 
@@ -120,6 +121,20 @@ export function DocumentExport({ kind }: { kind: DocKind }) {
               className={cn(buttonClasses("outline", "sm"), invalidRange && "pointer-events-none opacity-50")}
             >
               <Download className="h-4 w-4" /> Download Excel
+            </a>
+            <a
+              href={invalidRange ? undefined : `${href}&format=pdf`}
+              aria-disabled={invalidRange}
+              className={cn(buttonClasses("outline", "sm"), invalidRange && "pointer-events-none opacity-50")}
+            >
+              <FileText className="h-4 w-4" /> One PDF
+            </a>
+            <a
+              href={invalidRange ? undefined : `${href}&format=zip`}
+              aria-disabled={invalidRange}
+              className={cn(buttonClasses("outline", "sm"), invalidRange && "pointer-events-none opacity-50")}
+            >
+              <FileArchive className="h-4 w-4" /> ZIP of PDFs
             </a>
             {(from || to || status) && (
               <button
