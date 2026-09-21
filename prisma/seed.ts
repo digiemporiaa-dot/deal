@@ -19,8 +19,68 @@ function slugify(text: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+/**
+ * Refuse to run against a database that holds real work.
+ *
+ * Everything below this point deletes the catalogue and the CRM before
+ * rebuilding them from demo content, and it does so outside a transaction —
+ * so a failure halfway through leaves the data deleted and not restored.
+ * That is fine on an empty database and catastrophic on a live one, and the
+ * two are indistinguishable from inside the script.
+ *
+ * So it asks first. Bookings, payments, customers and leads are the records
+ * that cannot be recreated from anywhere else; if any exist, this is somebody's
+ * real business and the seed stops. `SEED_FORCE=1` overrides it for the case
+ * where a developer really does want to reset their own scratch database.
+ */
+async function assertSafeToWipe() {
+  const [bookings, payments, customers, leads] = await Promise.all([
+    prisma.booking.count(),
+    prisma.payment.count(),
+    prisma.customer.count(),
+    prisma.lead.count(),
+  ]);
+
+  const total = bookings + payments + customers + leads;
+  if (total === 0) return;
+
+  if (process.env.SEED_FORCE === "1") {
+    console.warn(
+      `⚠️  SEED_FORCE=1 — deleting ${bookings} booking(s), ${payments} payment(s), ` +
+        `${customers} customer(s) and ${leads} lead(s).`,
+    );
+    return;
+  }
+
+  console.error(
+    [
+      "",
+      "🛑 Refusing to seed: this database already holds real records.",
+      "",
+      `      bookings   ${bookings}`,
+      `      payments   ${payments}`,
+      `      customers  ${customers}`,
+      `      leads      ${leads}`,
+      "",
+      "   This script DELETES the catalogue and the CRM before inserting demo",
+      "   content. It is for a fresh, empty database only.",
+      "",
+      "   If you are deploying an existing site, you do not want this. Run:",
+      "      npx prisma db push          # apply the schema (additive)",
+      "      npm run db:seed-templates   # starter templates (additive)",
+      "",
+      "   If you really do want to erase everything, take a backup and re-run",
+      "   with SEED_FORCE=1.",
+      "",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
 async function main() {
   console.log("🌱 Seeding Vacationdeal database...");
+
+  await assertSafeToWipe();
 
   // ── Clear existing data (safe order) ───────────────────────
   await prisma.leadNote.deleteMany();

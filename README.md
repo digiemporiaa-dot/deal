@@ -114,6 +114,14 @@ npm run prisma:migrate      # create tables (dev)   — or: npm run db:push
 npm run db:seed             # 8 destinations, 12 packages, blog, leads, bookings…
 ```
 
+> **`db:seed` is for an empty database only.** It deletes the catalogue and the
+> whole CRM — bookings, payments, customers, leads — before inserting demo
+> content, and it does so outside a transaction, so a failure part-way through
+> leaves the data deleted and not restored. It now refuses to run when any of
+> those records exist (override with `SEED_FORCE=1`), but never point it at a
+> database you care about. To set up an existing site, use `npm run db:push`
+> and `npm run db:seed-templates`, both of which only add.
+
 ### 5. Run
 ```bash
 npm run dev                 # http://localhost:3000
@@ -145,7 +153,8 @@ npm run dev                 # http://localhost:3000
 | `npm run prisma:migrate` | Create/apply a dev migration |
 | `npm run prisma:deploy` | Apply migrations in production |
 | `npm run db:push` | Push schema without a migration |
-| `npm run db:seed` | Seed demo data |
+| `npm run db:seed` | **Destructive.** Wipes the catalogue and CRM, then inserts demo data. Empty databases only |
+| `npm run db:seed-templates` | Add the builder's starter templates (additive) |
 | `npm run prisma:studio` | Visual DB browser |
 
 ---
@@ -174,7 +183,7 @@ Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `ADMIN
 2. Add all env vars from `.env.example` in the Vercel project settings.
 3. Use a managed Postgres (Neon/Supabase/Vercel Postgres) for `DATABASE_URL`.
 4. Build command `npm run build`; the Prisma client is generated automatically.
-5. Run `npm run prisma:deploy` against the production DB (e.g. as a release step), then `npm run db:seed` once if you want demo data.
+5. Run `npm run prisma:deploy` against the production DB (e.g. as a release step), then `npm run db:seed-templates` for the builder's starter templates. Do **not** run `npm run db:seed` against a database that holds real bookings — it wipes the catalogue and the CRM first.
 6. For media uploads, set `STORAGE_DRIVER` to `vercel-blob` (with `BLOB_READ_WRITE_TOKEN`) or `s3` (with the `S3_*` variables). Local disk is not an option here: the filesystem is reset on every deploy and is not shared between instances.
 7. Set `CRON_SECRET`; `/api/cron/crm` refuses to run in production without it. The schedule is already declared in `vercel.json`.
 
