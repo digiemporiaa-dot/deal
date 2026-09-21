@@ -5,7 +5,7 @@ import type { SiteSettings } from "@/lib/settings";
 export function Footer({ settings }: { settings: SiteSettings }) {
   const year = new Date().getFullYear();
   return (
-    <footer className="mt-20 border-t border-slate-200 bg-slate-50">
+    <footer className="mt-20 border-t border-slate-200 bg-site-footer-bg text-site-footer-text">
       <div className="container-page grid grid-cols-1 gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center gap-2 font-display text-xl font-bold text-slate-900">

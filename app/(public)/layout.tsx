@@ -5,11 +5,14 @@ import { WhatsAppFloat } from "@/components/site/WhatsAppFloat";
 import { EnquiryProvider } from "@/components/enquiry/EnquiryProvider";
 import { AnalyticsScripts } from "@/components/site/AnalyticsScripts";
 import { MotionProvider } from "@/components/motion/MotionProvider";
+import { ThemeStyle } from "@/components/site/ThemeStyle";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettings();
   return (
     <MotionProvider>
+      <ThemeStyle theme={settings.theme} />
+
       {/*
         Animated elements are rendered at opacity 0 and faded in by the motion
         runtime. Without JavaScript that runtime never arrives, so this resets
@@ -25,8 +28,8 @@ export default async function PublicLayout({ children }: { children: React.React
       </noscript>
 
       <EnquiryProvider whatsappNumber={settings.whatsapp}>
-        <div className="flex min-h-screen flex-col">
-          <Header siteName={settings.siteName} links={settings.navigation.headerLinks} />
+        <div className="flex min-h-screen flex-col bg-site-bg text-site-body">
+          <Header siteName={settings.siteName} logoUrl={settings.logoUrl} links={settings.navigation.headerLinks} />
           <main className="flex-1">{children}</main>
           <Footer settings={settings} />
         </div>

@@ -354,6 +354,9 @@ export const SECTION_PERMISSIONS: Record<string, Permission[]> = {
   "activity-log": ["activity:view"],
   users: ["users:view"],
   settings: ["settings:view"],
+  // Appearance is a settings screen, so it follows the settings permission
+  // rather than falling through to the admin-only default for unknown paths.
+  appearance: ["settings:view"],
   export: ["export:data"],
 };
 

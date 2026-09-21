@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { cache } from "react";
+import { DEFAULT_THEME, normalizeTheme, type ThemeSettings } from "@/lib/theme";
 
 /**
  * Central site settings. Stored as a single JSON row (SiteSetting id=1) so a
@@ -32,6 +33,8 @@ export type SiteSettings = {
     metaPixelId: string;
     googleTagManagerId: string;
   };
+  /** How the public site looks. See lib/theme.ts. */
+  theme: ThemeSettings;
   navigation: {
     headerLinks: NavLink[];
     footerExploreTitle: string;
@@ -68,6 +71,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     metaPixelId: "",
     googleTagManagerId: "",
   },
+  theme: DEFAULT_THEME,
   navigation: {
     headerLinks: [
       { label: "Home", href: "/" },
@@ -107,6 +111,9 @@ export const getSettings = cache(async (): Promise<SiteSettings> => {
       ...DEFAULT_SETTINGS,
       ...data,
       navigation: { ...DEFAULT_SETTINGS.navigation, ...(data.navigation || {}) },
+      // Always coerced: a partial, hand-edited or corrupt theme block falls
+      // back field by field rather than reaching the stylesheet.
+      theme: normalizeTheme(data.theme),
     };
   } catch {
     return DEFAULT_SETTINGS;

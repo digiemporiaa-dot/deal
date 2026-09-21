@@ -6,6 +6,33 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: Georgia, "Times New Roman", serif;
 
+  /* ── Public site brand ramp ───────────────────────────────────────
+     Defaults only. The appearance module (Admin → Appearance) overrides
+     these per site by emitting a :root block, so the palette changes with a
+     save rather than a deploy. Raw "r g b" channels, so Tailwind can apply
+     opacity — `bg-brand-600/10` keeps working. */
+  --brand-50: 238 247 255;
+  --brand-100: 217 237 255;
+  --brand-200: 188 224 255;
+  --brand-300: 142 205 255;
+  --brand-400: 89 176 255;
+  --brand-500: 51 144 252;
+  --brand-600: 27 112 241;
+  --brand-700: 20 89 221;
+  --brand-800: 23 73 179;
+  --brand-900: 25 65 141;
+  --brand-950: 20 42 86;
+
+  /* Site surfaces and text, same story. */
+  --site-heading: 15 23 42;
+  --site-body: 51 65 85;
+  --site-bg: 255 255 255;
+  --site-header-bg: 255 255 255;
+  --site-footer-bg: 248 250 252;
+  --site-footer-text: 51 65 85;
+  --site-button-text: 255 255 255;
+  --site-button-radius: 8px;
+
   /* ── Admin design tokens ──────────────────────────────────────────
      Every admin surface reads these rather than a literal colour, so the
      palette is changed in one place — and so a dark theme can be added later
@@ -55,7 +82,7 @@
     @apply bg-white text-slate-800 antialiased;
   }
   h1, h2, h3, h4 {
-    @apply font-display tracking-tight text-slate-900;
+    @apply font-display tracking-tight text-site-heading;
   }
   /* Never allow horizontal overflow on the page body. */
   body {

@@ -29,18 +29,31 @@ const config: Config = {
           danger: "rgb(var(--admin-danger) / <alpha-value>)",
           info: "rgb(var(--admin-info) / <alpha-value>)",
         },
+        /* The public site's brand ramp. Read through CSS variables so the
+           appearance module can repaint the site from the admin panel without
+           a rebuild; globals.css holds the defaults, so an unthemed install
+           and the admin panel look exactly as they did before. */
         brand: {
-          50: "#eef7ff",
-          100: "#d9edff",
-          200: "#bce0ff",
-          300: "#8ecdff",
-          400: "#59b0ff",
-          500: "#3390fc",
-          600: "#1b70f1",
-          700: "#1459dd",
-          800: "#1749b3",
-          900: "#19418d",
-          950: "#142a56",
+          50: "rgb(var(--brand-50) / <alpha-value>)",
+          100: "rgb(var(--brand-100) / <alpha-value>)",
+          200: "rgb(var(--brand-200) / <alpha-value>)",
+          300: "rgb(var(--brand-300) / <alpha-value>)",
+          400: "rgb(var(--brand-400) / <alpha-value>)",
+          500: "rgb(var(--brand-500) / <alpha-value>)",
+          600: "rgb(var(--brand-600) / <alpha-value>)",
+          700: "rgb(var(--brand-700) / <alpha-value>)",
+          800: "rgb(var(--brand-800) / <alpha-value>)",
+          900: "rgb(var(--brand-900) / <alpha-value>)",
+          950: "rgb(var(--brand-950) / <alpha-value>)",
+        },
+        site: {
+          heading: "rgb(var(--site-heading) / <alpha-value>)",
+          body: "rgb(var(--site-body) / <alpha-value>)",
+          bg: "rgb(var(--site-bg) / <alpha-value>)",
+          "header-bg": "rgb(var(--site-header-bg) / <alpha-value>)",
+          "footer-bg": "rgb(var(--site-footer-bg) / <alpha-value>)",
+          "footer-text": "rgb(var(--site-footer-text) / <alpha-value>)",
+          "button-text": "rgb(var(--site-button-text) / <alpha-value>)",
         },
         sand: {
           50: "#faf7f2",

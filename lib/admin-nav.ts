@@ -22,6 +22,7 @@ import {
   UserCog,
   Users,
   Wallet,
+  Palette,
 } from "lucide-react";
 import { canAccessSection } from "@/lib/permissions";
 
@@ -117,6 +118,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/users", label: "Users & roles", icon: UserCog, section: "users" },
       { href: "/admin/activity-log", label: "Activity log", icon: Activity, section: "activity-log" },
+      { href: "/admin/appearance", label: "Appearance", icon: Palette, section: "settings" },
       { href: "/admin/settings", label: "Settings", icon: Settings, section: "settings" },
     ],
   },

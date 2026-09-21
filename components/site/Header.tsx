@@ -8,7 +8,15 @@ import { cn } from "@/lib/utils";
 
 type NavLink = { label: string; href: string };
 
-export function Header({ siteName, links }: { siteName: string; links: NavLink[] }) {
+export function Header({
+  siteName,
+  links,
+  logoUrl = "",
+}: {
+  siteName: string;
+  links: NavLink[];
+  logoUrl?: string;
+}) {
   const NAV = links;
   const [open, setOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
@@ -24,15 +32,26 @@ export function Header({ siteName, links }: { siteName: string; links: NavLink[]
     <header
       className={cn(
         "sticky top-0 z-50 w-full border-b transition-colors",
-        scrolled ? "border-slate-200 bg-white/95 backdrop-blur" : "border-transparent bg-white",
+        scrolled
+          ? "border-slate-200 bg-site-header-bg/95 backdrop-blur"
+          : "border-transparent bg-site-header-bg",
       )}
     >
       <div className="container-page flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2 font-display text-xl font-bold text-slate-900">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
-            <Plane className="h-5 w-5" />
-          </span>
-          {siteName}
+        <Link href="/" className="flex items-center gap-2 font-display text-xl font-bold text-site-heading">
+          {logoUrl ? (
+            /* The logo may sit on any host the admin pasted, and its intrinsic
+               size is unknown, so next/image cannot serve it unconfigured. */
+            // eslint-disable-next-line @next/next/no-img-element -- arbitrary host, unknown dimensions
+            <img src={logoUrl} alt={siteName} className="h-9 w-auto max-w-[200px] object-contain" />
+          ) : (
+            <>
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
+                <Plane className="h-5 w-5" />
+              </span>
+              {siteName}
+            </>
+          )}
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex">
