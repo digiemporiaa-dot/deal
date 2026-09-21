@@ -31,6 +31,11 @@
   --site-footer-bg: 248 250 252;
   --site-footer-text: 51 65 85;
   --site-button-text: 255 255 255;
+  /* Secondary button — slate-900 on white, hovering to slate-800, which is
+     exactly what it was before it became themeable. */
+  --site-button-2-bg: 15 23 42;
+  --site-button-2-hover: 30 41 59;
+  --site-button-2-text: 255 255 255;
   --site-button-radius: 8px;
 
   /* ── Admin design tokens ──────────────────────────────────────────

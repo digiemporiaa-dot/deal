@@ -151,9 +151,17 @@ export function VideoView({ content }: ViewProps) {
   );
 }
 
+/**
+ * Button styles for the builder's Button element.
+ *
+ * These read the same theme variables the site-wide Button component does, so
+ * a button dropped onto a built page follows Admin → Appearance like every
+ * other button. Before this they were a private copy of the palette, which
+ * meant changing the brand or secondary colour left built pages behind.
+ */
 const BUTTON_VARIANTS: Record<string, string> = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700",
-  secondary: "bg-slate-900 text-white hover:bg-slate-800",
+  primary: "bg-brand-600 text-site-button-text hover:bg-brand-700",
+  secondary: "bg-site-button2-bg text-site-button2-text hover:bg-site-button2-hover",
   outline: "border border-current bg-transparent hover:bg-black/5",
   ghost: "bg-transparent underline-offset-4 hover:underline",
 };
@@ -176,7 +184,7 @@ export function ButtonView({ content }: ViewProps) {
     <Link
       href={safeHref(content?.href)}
       {...linkAttributes(content)}
-      className={`inline-flex w-fit items-center justify-center gap-2 rounded-lg font-semibold transition-colors ${variant} ${size}`}
+      className={`inline-flex w-fit items-center justify-center gap-2 rounded-[var(--site-button-radius)] font-semibold transition-colors ${variant} ${size}`}
     >
       {Icon && !iconRight && <Icon className="h-4 w-4" aria-hidden />}
       {label}

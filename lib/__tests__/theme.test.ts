@@ -4,6 +4,7 @@ import {
   FONTS,
   brandScale,
   googleFontHref,
+  hoverShade,
   normalizeTheme,
   parseHex,
   themeCss,
@@ -52,7 +53,13 @@ describe("CSS injection", () => {
 
   it("never lets a payload reach the output", () => {
     for (const payload of payloads) {
-      const css = themeCss({ brandColor: payload, headingColor: payload, bodyColor: payload });
+      const css = themeCss({
+        brandColor: payload,
+        headingColor: payload,
+        bodyColor: payload,
+        secondaryButtonColor: payload,
+        secondaryButtonTextColor: payload,
+      });
       expect(css).not.toContain("display:none");
       expect(css).not.toContain("visibility");
       expect(css).not.toContain("script");
@@ -71,9 +78,17 @@ describe("CSS injection", () => {
 
   it("emits only digits and spaces for every colour channel", () => {
     const css = themeCss({ brandColor: "#1b70f1" });
-    for (const [, value] of css.matchAll(/--(?:brand-\d+|site-(?:heading|body|bg|footer-text|button-text)):([^;}]+)/g)) {
+    const colours = css.matchAll(
+      /--(?:brand-\d+|site-(?:heading|body|bg|footer-text|button-text|button-2-bg|button-2-hover|button-2-text)):([^;}]+)/g,
+    );
+    let seen = 0;
+    for (const [, value] of colours) {
       expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+      seen += 1;
     }
+    // 11 brand steps + 8 site colours. Asserting the count too, because a
+    // regex that quietly matches nothing would pass the loop above.
+    expect(seen).toBe(19);
   });
 
   it("only ever emits a radius it owns", () => {
@@ -166,5 +181,64 @@ describe("googleFontHref", () => {
     const href = googleFontHref({ headingFont: "https://evil.test/x.css", bodyFont: "inter" })!;
     expect(href.startsWith("https://fonts.googleapis.com/css2?")).toBe(true);
     expect(href).not.toContain("evil");
+  });
+});
+
+
+describe("secondary button", () => {
+  it("defaults to the slate it was hardcoded to", () => {
+    const css = themeCss({});
+    expect(css).toContain("--site-button-2-bg:15 23 42");
+    expect(css).toContain("--site-button-2-text:255 255 255");
+  });
+
+  it("derives its hover rather than reusing the old hardcoded pair", () => {
+    // The resting colour is unchanged (slate-900). The hover used to be
+    // slate-800 — a second hand-picked Tailwind step, which only exists for
+    // that one colour. It is now derived from whatever the admin chose, so it
+    // lands near slate-800 rather than exactly on it: 23 35 65 against
+    // 30 41 59, a shade bluer and imperceptible in a hover state. That is the
+    // cost of the hover working for every colour instead of one.
+    const css = themeCss({});
+    expect(css).toContain("--site-button-2-hover:23 35 65");
+  });
+
+  it("is independent of the brand colour", () => {
+    const css = themeCss({ brandColor: "#ff0000", secondaryButtonColor: "#00aa55" });
+    expect(css).toContain("--site-button-2-bg:0 170 85");
+    expect(css).toContain("--brand-600:255 0 0");
+  });
+
+  it("falls back on its own when only it is invalid", () => {
+    const css = themeCss({ brandColor: "#00ff00", secondaryButtonColor: "not a colour" });
+    expect(css).toContain("--brand-600:0 255 0");
+    expect(css).toContain("--site-button-2-bg:15 23 42");
+  });
+});
+
+describe("hoverShade", () => {
+  it("lightens a dark colour and darkens a light one", () => {
+    const dark = hoverShade({ r: 15, g: 23, b: 42 });
+    expect(dark.r + dark.g + dark.b).toBeGreaterThan(15 + 23 + 42);
+
+    const light = hoverShade({ r: 240, g: 240, b: 240 });
+    expect(light.r + light.g + light.b).toBeLessThan(240 * 3);
+  });
+
+  it("always moves, even at pure black and pure white", () => {
+    const black = hoverShade({ r: 0, g: 0, b: 0 });
+    const white = hoverShade({ r: 255, g: 255, b: 255 });
+    expect(black).not.toEqual({ r: 0, g: 0, b: 0 });
+    expect(white).not.toEqual({ r: 255, g: 255, b: 255 });
+  });
+
+  it("stays in range", () => {
+    for (const c of ["#000000", "#ffffff", "#0f172a", "#ff0000", "#7f7f7f"]) {
+      const out = hoverShade(parseHex(c)!);
+      for (const v of [out.r, out.g, out.b]) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(255);
+      }
+    }
   });
 });

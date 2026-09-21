@@ -37,15 +37,26 @@ import {
 
 type Props = { initial: ThemeSettings; logoUrl: string; faviconUrl: string };
 
-const COLOR_FIELDS: { key: keyof ThemeSettings; label: string; help: string }[] = [
-  { key: "brandColor", label: "Brand colour", help: "Buttons, links and highlights. The rest of the palette is derived from this." },
-  { key: "buttonTextColor", label: "Button text", help: "Text on a primary button. Keep it readable against the brand colour." },
+type ColorField = { key: keyof ThemeSettings; label: string; help: string };
+
+const BRAND_FIELDS: ColorField[] = [
+  { key: "brandColor", label: "Brand colour", help: "Links and highlights, and the primary button. The rest of the palette is derived from this." },
   { key: "headingColor", label: "Headings", help: "Every h1–h4 on the site." },
   { key: "bodyColor", label: "Body text", help: "Paragraphs and descriptions." },
   { key: "pageBackground", label: "Page background", help: "Behind the whole site." },
   { key: "headerBackground", label: "Header background", help: "The sticky bar at the top." },
   { key: "footerBackground", label: "Footer background", help: "The block at the bottom." },
   { key: "footerText", label: "Footer text", help: "Text inside the footer." },
+];
+
+const PRIMARY_BUTTON_FIELDS: ColorField[] = [
+  { key: "brandColor", label: "Background", help: "This is the brand colour — changing it here changes it everywhere." },
+  { key: "buttonTextColor", label: "Text", help: "Keep it readable against the background." },
+];
+
+const SECONDARY_BUTTON_FIELDS: ColorField[] = [
+  { key: "secondaryButtonColor", label: "Background", help: "The second button style, used beside a primary one." },
+  { key: "secondaryButtonTextColor", label: "Text", help: "Keep it readable against the background." },
 ];
 
 const RADIUS_LABELS: Record<ButtonRadius, string> = {
@@ -88,6 +99,11 @@ export function AppearanceForm({ initial, logoUrl: initialLogo, faviconUrl: init
     vars["--site-footer-bg"] = solid(theme.footerBackground, DEFAULT_THEME.footerBackground);
     vars["--site-footer-text"] = solid(theme.footerText, DEFAULT_THEME.footerText);
     vars["--site-button-text"] = solid(theme.buttonTextColor, DEFAULT_THEME.buttonTextColor);
+    vars["--site-button-2-bg"] = solid(theme.secondaryButtonColor, DEFAULT_THEME.secondaryButtonColor);
+    vars["--site-button-2-text"] = solid(
+      theme.secondaryButtonTextColor,
+      DEFAULT_THEME.secondaryButtonTextColor,
+    );
     vars["--font-display"] = FONTS[theme.headingFont].stack;
     vars["--font-sans"] = FONTS[theme.bodyFont].stack;
     return vars as React.CSSProperties;
@@ -147,7 +163,7 @@ export function AppearanceForm({ initial, logoUrl: initialLogo, faviconUrl: init
 
         <Card title="Colours" hint="Pick a colour or type a hex code. Both stay in step.">
           <div className="grid gap-4 sm:grid-cols-2">
-            {COLOR_FIELDS.map((f) => (
+            {BRAND_FIELDS.map((f) => (
               <ColorField
                 key={f.key}
                 label={f.label}
@@ -198,7 +214,42 @@ export function AppearanceForm({ initial, logoUrl: initialLogo, faviconUrl: init
           </p>
         </Card>
 
-        <Card title="Buttons" hint="Applies to every button on the public site.">
+        <Card title="Buttons" hint="Applies to every button on the public site, including buttons placed with the page builder.">
+          <div className="mb-5 grid gap-5 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-admin-text-muted">
+                Primary button
+              </p>
+              <div className="space-y-3">
+                {PRIMARY_BUTTON_FIELDS.map((f) => (
+                  <ColorField
+                    key={`primary-${String(f.key)}`}
+                    label={f.label}
+                    help={f.help}
+                    value={theme[f.key] as string}
+                    onChange={(v) => set(f.key, v as never)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-admin-text-muted">
+                Secondary button
+              </p>
+              <div className="space-y-3">
+                {SECONDARY_BUTTON_FIELDS.map((f) => (
+                  <ColorField
+                    key={`secondary-${String(f.key)}`}
+                    label={f.label}
+                    help={f.help}
+                    value={theme[f.key] as string}
+                    onChange={(v) => set(f.key, v as never)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
           <Label>Corner shape</Label>
           <div className="flex flex-wrap gap-2">
             {RADIUS_KEYS.map((r) => (
@@ -294,6 +345,16 @@ export function AppearanceForm({ initial, logoUrl: initialLogo, faviconUrl: init
                   Book now
                 </span>
                 <span
+                  className="inline-flex h-10 items-center px-5 text-sm font-semibold"
+                  style={{
+                    background: "rgb(var(--site-button-2-bg))",
+                    color: "rgb(var(--site-button-2-text))",
+                    borderRadius: radiusPx,
+                  }}
+                >
+                  Enquire
+                </span>
+                <span
                   className="inline-flex h-10 items-center border px-5 text-sm font-semibold"
                   style={{
                     borderColor: "rgb(var(--brand-600))",
@@ -301,7 +362,7 @@ export function AppearanceForm({ initial, logoUrl: initialLogo, faviconUrl: init
                     borderRadius: radiusPx,
                   }}
                 >
-                  Enquire
+                  Outline
                 </span>
               </div>
 

@@ -75,6 +75,9 @@ export type ThemeSettings = {
   footerBackground: string;
   footerText: string;
   buttonTextColor: string;
+  /** The second button style — "Secondary" in the builder's Button element. */
+  secondaryButtonColor: string;
+  secondaryButtonTextColor: string;
   buttonRadius: ButtonRadius;
   headingFont: FontKey;
   bodyFont: FontKey;
@@ -89,6 +92,8 @@ export const DEFAULT_THEME: ThemeSettings = {
   footerBackground: "#f8fafc",
   footerText: "#334155",
   buttonTextColor: "#ffffff",
+  secondaryButtonColor: "#0f172a",
+  secondaryButtonTextColor: "#ffffff",
   buttonRadius: "medium",
   headingFont: "georgia",
   bodyFont: "system",
@@ -188,6 +193,20 @@ const SCALE: Record<string, number> = {
   "950": 0.18,
 };
 
+/**
+ * The colour a solid button becomes on hover.
+ *
+ * Always a step *away* from where the colour already is: a dark button
+ * lightens, a light one darkens. Darkening unconditionally would make a
+ * near-black button look broken on hover — nothing visibly happens — which is
+ * how the hardcoded slate-900/slate-800 pair worked before this was derived.
+ */
+export function hoverShade(base: Rgb): Rgb {
+  const { h, s, l } = rgbToHsl(base);
+  const next = l < 0.5 ? Math.min(1, l + 0.06) : Math.max(0, l - 0.06);
+  return hslToRgb(h, s, next);
+}
+
 export type BrandScale = Record<string, Rgb>;
 
 export function brandScale(base: Rgb): BrandScale {
@@ -232,6 +251,11 @@ export function normalizeTheme(input: unknown): ThemeSettings {
     footerBackground: colorOr(t.footerBackground, DEFAULT_THEME.footerBackground),
     footerText: colorOr(t.footerText, DEFAULT_THEME.footerText),
     buttonTextColor: colorOr(t.buttonTextColor, DEFAULT_THEME.buttonTextColor),
+    secondaryButtonColor: colorOr(t.secondaryButtonColor, DEFAULT_THEME.secondaryButtonColor),
+    secondaryButtonTextColor: colorOr(
+      t.secondaryButtonTextColor,
+      DEFAULT_THEME.secondaryButtonTextColor,
+    ),
     buttonRadius:
       typeof t.buttonRadius === "string" && t.buttonRadius in RADII
         ? (t.buttonRadius as ButtonRadius)
@@ -269,6 +293,14 @@ export function themeCss(input: unknown): string {
   decl.push(`--site-footer-bg:${solid(theme.footerBackground, DEFAULT_THEME.footerBackground)}`);
   decl.push(`--site-footer-text:${solid(theme.footerText, DEFAULT_THEME.footerText)}`);
   decl.push(`--site-button-text:${solid(theme.buttonTextColor, DEFAULT_THEME.buttonTextColor)}`);
+
+  const secondary =
+    parseHex(theme.secondaryButtonColor) ?? parseHex(DEFAULT_THEME.secondaryButtonColor)!;
+  decl.push(`--site-button-2-bg:${channels(secondary)}`);
+  decl.push(`--site-button-2-hover:${channels(hoverShade(secondary))}`);
+  decl.push(
+    `--site-button-2-text:${solid(theme.secondaryButtonTextColor, DEFAULT_THEME.secondaryButtonTextColor)}`,
+  );
   decl.push(`--site-button-radius:${RADII[theme.buttonRadius]}`);
   decl.push(`--font-sans:${FONTS[theme.bodyFont].stack}`);
   decl.push(`--font-display:${FONTS[theme.headingFont].stack}`);

@@ -54,6 +54,9 @@ const config: Config = {
           "footer-bg": "rgb(var(--site-footer-bg) / <alpha-value>)",
           "footer-text": "rgb(var(--site-footer-text) / <alpha-value>)",
           "button-text": "rgb(var(--site-button-text) / <alpha-value>)",
+          "button2-bg": "rgb(var(--site-button-2-bg) / <alpha-value>)",
+          "button2-hover": "rgb(var(--site-button-2-hover) / <alpha-value>)",
+          "button2-text": "rgb(var(--site-button-2-text) / <alpha-value>)",
         },
         sand: {
           50: "#faf7f2",
