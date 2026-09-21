@@ -144,7 +144,27 @@ export function CanvasNode({
     data: { nodeId: node.id, nodeType: node.type },
   });
 
+  const children = node.children ?? [];
+
+  /**
+   * The node's own box, styled from its settings.
+   *
+   * For a `columns` node the grid lives here, on the node's own element —
+   * exactly where the published renderer puts it. It used to be applied twice:
+   * once here from the settings, and again on a wrapper div inside. That inner
+   * grid then occupied a single track of the outer one and split it again, so
+   * two columns in an 844px row came out 199px wide with 440px of dead space
+   * beside them, and a nested pair shrank to 38px with their labels overlapping.
+   */
   const style = toCssProperties(resolveStyle(node.settings, ctx.breakpoint));
+  if (node.type === "columns") {
+    style.display = style.display ?? "grid";
+    // A columns node saved without an explicit count still needs tracks, or
+    // its children stack into one implicit column.
+    if (!style.gridTemplateColumns) {
+      style.gridTemplateColumns = `repeat(${children.length || 1}, minmax(0, 1fr))`;
+    }
+  }
   const hiddenHere = isHiddenAt(node.settings, ctx.breakpoint);
 
   const select = (event: React.MouseEvent) => {
@@ -152,7 +172,6 @@ export function CanvasNode({
     ctx.dispatch({ type: "select", id: node.id });
   };
 
-  const children = node.children ?? [];
   const acceptsChildren = (def?.allowedChildren.length ?? 0) > 0;
   // Columns lay their children out side by side, so their drop zones are too.
   const childOrientation = node.type === "columns" ? "vertical" : "horizontal";
@@ -283,18 +302,11 @@ export function CanvasNode({
       {/* Body: layout nodes host children, everything else renders a preview. */}
       {acceptsChildren ? (
         <div
-          className={
-            node.type === "columns"
-              ? "grid gap-2"
-              : "min-h-12"
-          }
-          style={
-            node.type === "columns"
-              ? {
-                  gridTemplateColumns: `repeat(${resolveStyle(node.settings, ctx.breakpoint).columns ?? children.length ?? 1}, minmax(0,1fr))`,
-                }
-              : undefined
-          }
+          // `display: contents` dissolves this wrapper so the column boxes
+          // below become items of the node's own grid rather than of a second
+          // one nested inside it.
+          className={node.type === "columns" ? undefined : "min-h-12"}
+          style={node.type === "columns" ? { display: "contents" } : undefined}
         >
           {children.length === 0 ? (
             <EmptyDropTarget node={node} ctx={ctx} />
@@ -324,6 +336,7 @@ export function CanvasNode({
           {isLayout && showChrome && (
             <button
               type="button"
+              style={node.type === "columns" ? { gridColumn: "1 / -1" } : undefined}
               onClick={(event) => {
                 event.stopPropagation();
                 ctx.onAddInside(node.id, children.length);
@@ -347,7 +360,7 @@ export function CanvasNode({
 
 function EmptyDropTarget({ node, ctx }: { node: BuilderNode; ctx: CanvasContext }) {
   return (
-    <div className="p-2">
+    <div className="p-2" style={node.type === "columns" ? { gridColumn: "1 / -1" } : undefined}>
       <DropZone parentId={node.id} index={0} ctx={ctx} />
       <button
         type="button"
