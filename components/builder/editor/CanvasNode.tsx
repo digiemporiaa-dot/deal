@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   Copy,
+  CornerLeftUp,
   GripVertical,
   Plus,
   Save,
@@ -18,6 +19,7 @@ import { str } from "@/lib/builder/content";
 import type { BuilderNode, Breakpoint } from "@/lib/builder/schema";
 import type { BuilderAction } from "@/components/builder/editor/useBuilderState";
 import { ElementPreview } from "@/components/builder/editor/ElementPreview";
+import { getElementIcon } from "@/components/builder/editor/element-icons";
 
 /**
  * A node as it appears on the editor canvas: the element's own preview plus
@@ -30,6 +32,18 @@ import { ElementPreview } from "@/components/builder/editor/ElementPreview";
 
 export type CanvasContext = {
   selectedId: string | null;
+  /**
+   * The innermost node under the pointer.
+   *
+   * Tracked in state rather than with `group-hover`, because nodes nest:
+   * a named Tailwind group matches *any* ancestor carrying that name, so
+   * pointing at a heading lit up the toolbars of its column, its container
+   * and its section as well — five bars stacked over the content they were
+   * meant to label. Each node claims the hover and stops the event, so only
+   * the deepest one is ever marked.
+   */
+  hoveredId: string | null;
+  onHover: (id: string | null) => void;
   breakpoint: Breakpoint;
   dispatch: React.Dispatch<BuilderAction>;
   /** Node currently being dragged, so drop zones can check nesting rules. */
@@ -110,7 +124,16 @@ function parentTypeOf(parentId: string, _ctx: CanvasContext): string {
   return element?.getAttribute("data-node-type") ?? "container";
 }
 
-export function CanvasNode({ node, ctx }: { node: BuilderNode; ctx: CanvasContext }) {
+export function CanvasNode({
+  node,
+  ctx,
+  parentId = null,
+}: {
+  node: BuilderNode;
+  ctx: CanvasContext;
+  /** Set by the parent that rendered this node, for "select parent". */
+  parentId?: string | null;
+}) {
   const def = getElementDef(node.type);
   const selected = ctx.selectedId === node.id;
   const isSection = node.type === "section";
@@ -134,25 +157,58 @@ export function CanvasNode({ node, ctx }: { node: BuilderNode; ctx: CanvasContex
   // Columns lay their children out side by side, so their drop zones are too.
   const childOrientation = node.type === "columns" ? "vertical" : "horizontal";
 
+  const Icon = getElementIcon(node.type);
+  const hovered = ctx.hoveredId === node.id;
+  /**
+   * Exactly one toolbar exists on the canvas at any moment.
+   *
+   * The pointer wins while it is over the canvas; the selection only shows
+   * its toolbar once the pointer has left. Letting both show at once puts two
+   * bars on screen, and in a tight stack the lower one covers the element
+   * above it — the selected button's toolbar sitting over the paragraph. The
+   * selection is still obvious without its toolbar: it keeps the solid
+   * outline, and the settings panel is showing it.
+   */
+  const showChrome = ctx.draggingType
+    ? false
+    : hovered || (selected && ctx.hoveredId === null);
+
   return (
     <div
       ref={setNodeRef}
       data-node-id={node.id}
       data-node-type={node.type}
       onClick={select}
+      onMouseOver={(event) => {
+        // Stopping here is what makes the innermost node win: the ancestors
+        // never see the event, so they never mark themselves hovered.
+        event.stopPropagation();
+        ctx.onHover(node.id);
+      }}
       className={[
-        "group/node relative",
-        selected ? "outline outline-2 outline-brand-600" : "outline outline-1 outline-transparent hover:outline-brand-300",
+        "relative",
+        selected
+          ? "outline outline-2 outline-brand-600"
+          : hovered
+            ? "outline outline-1 outline-dashed outline-brand-400"
+            : "outline outline-1 outline-transparent",
         isDragging ? "opacity-40" : "",
         hiddenHere ? "opacity-40" : "",
       ].join(" ")}
       style={style}
     >
-      {/* Label and controls, shown on hover or when selected. */}
+      {/*
+        The toolbar sits *above* the element rather than inside it. At
+        `-top-px` it covered the element's own first line — a heading's text
+        was behind its own label. Sitting clear of the box means it never
+        hides what it is labelling, and `whitespace-nowrap` lets it run
+        wider than a narrow element instead of wrapping into it.
+      */}
       <div
         className={[
-          "absolute -top-px left-0 z-20 flex items-center gap-0.5 rounded-b-md bg-brand-600 px-1 py-0.5 text-[10px] font-semibold text-white",
-          selected ? "flex" : "hidden group-hover/node:flex",
+          "absolute -top-[22px] left-0 z-30 flex items-center gap-0.5 whitespace-nowrap rounded-t-md px-1 py-[3px] text-[10px] font-semibold text-white shadow-sm",
+          selected ? "bg-brand-600" : "bg-brand-500",
+          showChrome ? "flex" : "hidden",
         ].join(" ")}
       >
         <button
@@ -164,7 +220,17 @@ export function CanvasNode({ node, ctx }: { node: BuilderNode; ctx: CanvasContex
         >
           <GripVertical className="h-3 w-3" />
         </button>
-        <span className="px-1">{def?.label ?? node.type}</span>
+        <Icon className="h-3 w-3 opacity-90" />
+        <span className="pr-1">{def?.label ?? node.type}</span>
+
+        {parentId && (
+          <IconAction
+            title="Select parent"
+            onClick={() => ctx.dispatch({ type: "select", id: parentId })}
+          >
+            <CornerLeftUp className="h-3 w-3" />
+          </IconAction>
+        )}
 
         {isSection && (
           <>
@@ -235,7 +301,7 @@ export function CanvasNode({ node, ctx }: { node: BuilderNode; ctx: CanvasContex
           ) : node.type === "columns" ? (
             children.map((child) => (
               <div key={child.id} className="min-h-16 rounded border border-dashed border-slate-200">
-                <CanvasNode node={child} ctx={ctx} />
+                <CanvasNode node={child} ctx={ctx} parentId={node.id} />
               </div>
             ))
           ) : (
@@ -243,7 +309,7 @@ export function CanvasNode({ node, ctx }: { node: BuilderNode; ctx: CanvasContex
               <DropZone parentId={node.id} index={0} ctx={ctx} orientation={childOrientation} />
               {children.map((child, index) => (
                 <React.Fragment key={child.id}>
-                  <CanvasNode node={child} ctx={ctx} />
+                  <CanvasNode node={child} ctx={ctx} parentId={node.id} />
                   <DropZone
                     parentId={node.id}
                     index={index + 1}
@@ -255,14 +321,16 @@ export function CanvasNode({ node, ctx }: { node: BuilderNode; ctx: CanvasContex
             </>
           )}
 
-          {isLayout && (
+          {isLayout && showChrome && (
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 ctx.onAddInside(node.id, children.length);
               }}
-              className="mt-1 flex w-full items-center justify-center gap-1 rounded border border-dashed border-slate-300 py-1.5 text-xs font-medium text-slate-400 opacity-0 transition-opacity hover:border-brand-400 hover:text-brand-600 group-hover/node:opacity-100"
+              className={[
+                "mt-1 flex w-full items-center justify-center gap-1 whitespace-nowrap rounded border border-dashed border-brand-300 py-1.5 text-xs font-medium text-brand-600 transition-colors hover:border-brand-500 hover:bg-brand-50",
+              ].join(" ")}
             >
               <Plus className="h-3 w-3" /> Add element
             </button>

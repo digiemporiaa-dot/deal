@@ -109,6 +109,9 @@ export function PageBuilder({
 
   const { document, selectedId, breakpoint, dirty, past, future } = state;
 
+  /** The innermost node under the pointer; see CanvasContext.hoveredId. */
+  const [hoveredId, setHoveredId] = React.useState<string | null>(null);
+
   const onSave = React.useCallback(
     async (doc: PageDocument) => {
       // Validate before the round trip so a broken document is caught with a
@@ -304,6 +307,8 @@ export function PageBuilder({
 
   const ctx: CanvasContext = {
     selectedId,
+    hoveredId,
+    onHover: setHoveredId,
     breakpoint,
     dispatch,
     draggingType: dragging?.type ?? null,
@@ -486,8 +491,9 @@ export function PageBuilder({
           </aside>
 
           <main
-            className="flex-1 overflow-y-auto bg-slate-200/60 p-6"
+            className="flex-1 overflow-y-auto bg-slate-200/60 p-6 pt-8"
             onClick={() => dispatch({ type: "select", id: null })}
+            onMouseLeave={() => setHoveredId(null)}
           >
             <div
               className="mx-auto min-h-full bg-white shadow-sm transition-all"
