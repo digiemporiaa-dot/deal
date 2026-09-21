@@ -33,9 +33,20 @@ export const DURATION = {
 /** Distance a revealing element travels. Small on purpose. */
 export const RISE = 24;
 
+/**
+ * `delay` is omitted when it is zero rather than written as `delay: 0`.
+ *
+ * That is not tidiness. A child variant carrying an explicit delay overrides
+ * the one its parent computes from `staggerChildren`, so writing `delay: 0`
+ * into the shared rise variant silently cancelled every stagger on the site:
+ * the parent worked out 0ms, 70ms, 140ms… for its children, and each child
+ * threw that away and used 0. Cards that were supposed to arrive one after
+ * another all moved at once, which looks like a slower fade rather than an
+ * obvious bug — which is why it survived being "verified" twice.
+ */
 export const transition = (duration: number = DURATION.reveal, delay = 0): Transition => ({
   duration,
-  delay,
+  ...(delay ? { delay } : {}),
   ease: EASE,
 });
 

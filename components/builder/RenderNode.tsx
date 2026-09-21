@@ -189,31 +189,31 @@ export async function RenderNode({ node, ctx }: Props) {
     case "cards":
       return (
         <div {...attrs}>
-          <CardsView content={content} />
+          <CardsView content={content} animate />
         </div>
       );
     case "featureList":
       return (
         <div {...attrs}>
-          <FeatureListView content={content} />
+          <FeatureListView content={content} animate />
         </div>
       );
     case "gallery":
       return (
         <div {...attrs}>
-          <GalleryView content={content} />
+          <GalleryView content={content} animate />
         </div>
       );
     case "logoGrid":
       return (
         <div {...attrs}>
-          <LogoGridView content={content} />
+          <LogoGridView content={content} animate />
         </div>
       );
     case "pricingTable":
       return (
         <div {...attrs}>
-          <PricingTableView content={content} />
+          <PricingTableView content={content} animate />
         </div>
       );
     case "comparisonTable":
@@ -231,7 +231,7 @@ export async function RenderNode({ node, ctx }: Props) {
     case "trustBadges":
       return (
         <div {...attrs}>
-          <TrustBadgesView content={content} />
+          <TrustBadgesView content={content} animate />
         </div>
       );
 
@@ -279,7 +279,7 @@ export async function RenderNode({ node, ctx }: Props) {
         : await loadTestimonials(content?.limit);
       return (
         <div {...attrs}>
-          <TestimonialsView content={content} items={items} />
+          <TestimonialsView content={content} items={items} animate />
         </div>
       );
     }
@@ -294,7 +294,7 @@ export async function RenderNode({ node, ctx }: Props) {
       });
       return (
         <div {...attrs}>
-          <PackageGridView content={content} packages={packages} />
+          <PackageGridView content={content} packages={packages} animate />
         </div>
       );
     }
@@ -309,7 +309,7 @@ export async function RenderNode({ node, ctx }: Props) {
       });
       return (
         <div {...attrs}>
-          <PackageGridView content={content} packages={packages} />
+          <PackageGridView content={content} packages={packages} animate />
         </div>
       );
     }
@@ -322,7 +322,7 @@ export async function RenderNode({ node, ctx }: Props) {
       });
       return (
         <div {...attrs}>
-          <DestinationGridView content={content} destinations={destinations} />
+          <DestinationGridView content={content} destinations={destinations} animate />
         </div>
       );
     }
@@ -331,7 +331,7 @@ export async function RenderNode({ node, ctx }: Props) {
       const destinations = await loadDestinations({ source: "popular", limit: content?.limit ?? 4 });
       return (
         <div {...attrs}>
-          <DestinationGridView content={content} destinations={destinations} />
+          <DestinationGridView content={content} destinations={destinations} animate />
         </div>
       );
     }
@@ -344,7 +344,7 @@ export async function RenderNode({ node, ctx }: Props) {
       });
       return (
         <div {...attrs}>
-          <BlogGridView content={content} posts={posts} />
+          <BlogGridView content={content} posts={posts} animate />
         </div>
       );
     }

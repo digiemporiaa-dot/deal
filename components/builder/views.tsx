@@ -8,7 +8,9 @@
  * failure mode. Images inside the fixed catalogue components (package and
  * destination cards) still go through next/image elsewhere in the app.
  */
+import * as React from "react";
 import Link from "next/link";
+import { Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { getIcon } from "@/components/builder/icons";
 import { sanitizeHtml } from "@/lib/sanitize";
@@ -250,8 +252,25 @@ export function ImageTextView({ content }: ViewProps) {
 }
 
 /** Wraps a grid whose column count comes from the node's own settings. */
-function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="vd-grid grid gap-6">{children}</div>;
+/**
+ * A grid of cards.
+ *
+ * `animate` staggers the cards in as the grid reaches the viewport, and is
+ * off unless the published renderer asks for it. That default is the whole
+ * point: the editor canvas imports these same views, and an admin arranging
+ * cards must never find them starting invisible or sliding about under the
+ * cursor. Only `RenderNode`, rendering a live page, turns it on.
+ */
+function Grid({ children, animate }: { children: React.ReactNode; animate?: boolean }) {
+  if (!animate) return <div className="vd-grid grid gap-6">{children}</div>;
+
+  return (
+    <Stagger className="vd-grid grid gap-6">
+      {React.Children.map(children, (child) => (
+        <StaggerItem className="h-full">{child}</StaggerItem>
+      ))}
+    </Stagger>
+  );
 }
 
 export function SectionHeadingView({
@@ -286,7 +305,7 @@ export function SectionHeadingView({
   );
 }
 
-export function CardsView({ content }: ViewProps) {
+export function CardsView({ content, animate }: ViewProps & { animate?: boolean }) {
   const items = list(content, "items");
   const style = str(content, "style", "icon");
   if (items.length === 0) return <EmptyHint label="Add some cards" />;
@@ -294,7 +313,7 @@ export function CardsView({ content }: ViewProps) {
   return (
     <div>
       <SectionHeadingView title={str(content, "title")} subtitle={str(content, "subtitle")} />
-      <Grid>
+      <Grid animate={animate}>
         {items.map((item, index) => {
           const Icon = getIcon(item.icon);
           const image = safeImageSrc(item.image);
@@ -341,7 +360,7 @@ export function CardsView({ content }: ViewProps) {
   );
 }
 
-export function FeatureListView({ content }: ViewProps) {
+export function FeatureListView({ content, animate }: ViewProps & { animate?: boolean }) {
   const items = list(content, "items");
   if (items.length === 0) return <EmptyHint label="Add some list items" />;
   return (
@@ -359,11 +378,11 @@ export function FeatureListView({ content }: ViewProps) {
   );
 }
 
-export function StatisticsView({ content }: ViewProps) {
+export function StatisticsView({ content, animate }: ViewProps & { animate?: boolean }) {
   const items = list(content, "items");
   if (items.length === 0) return <EmptyHint label="Add some statistics" />;
   return (
-    <Grid>
+    <Grid animate={animate}>
       {items.map((item, index) => (
         <div key={index} className="text-center">
           <p className="font-display text-4xl font-bold text-slate-900">{itemStr(item, "value")}</p>
@@ -374,11 +393,11 @@ export function StatisticsView({ content }: ViewProps) {
   );
 }
 
-export function GalleryView({ content }: ViewProps) {
+export function GalleryView({ content, animate }: ViewProps & { animate?: boolean }) {
   const items = list(content, "items");
   if (items.length === 0) return <EmptyHint label="Add some images" />;
   return (
-    <Grid>
+    <Grid animate={animate}>
       {items.map((item, index) => {
         const src = safeImageSrc(item.src);
         if (!src) return null;
@@ -399,11 +418,11 @@ export function GalleryView({ content }: ViewProps) {
   );
 }
 
-export function LogoGridView({ content }: ViewProps) {
+export function LogoGridView({ content, animate }: ViewProps & { animate?: boolean }) {
   const items = list(content, "items");
   if (items.length === 0) return <EmptyHint label="Add some logos" />;
   return (
-    <Grid>
+    <Grid animate={animate}>
       {items.map((item, index) => {
         const src = safeImageSrc(item.image);
         if (!src) return null;
@@ -429,11 +448,11 @@ export function LogoGridView({ content }: ViewProps) {
   );
 }
 
-export function PricingTableView({ content }: ViewProps) {
+export function PricingTableView({ content, animate }: ViewProps & { animate?: boolean }) {
   const plans = list(content, "plans");
   if (plans.length === 0) return <EmptyHint label="Add a pricing plan" />;
   return (
-    <Grid>
+    <Grid animate={animate}>
       {plans.map((plan, index) => {
         const featured = plan.featured === true;
         const features = itemStr(plan, "features")
@@ -538,13 +557,12 @@ export function TimelineView({ content }: ViewProps) {
 
 export function TestimonialsView({
   content,
-  items,
-}: ViewProps & { items: TestimonialData[] }) {
+  items, animate }: ViewProps & { items: TestimonialData[]; animate?: boolean }) {
   if (items.length === 0) return <EmptyHint label="No testimonials to show yet" />;
   return (
     <div>
       <SectionHeadingView title={str(content, "title")} />
-      <Grid>
+      <Grid animate={animate}>
         {items.map((item) => (
           <figure key={item.id} className="rounded-2xl border border-slate-200 bg-white p-6">
             <div className="flex gap-0.5 text-amber-400" aria-label={`${item.rating} out of 5`}>
@@ -563,11 +581,11 @@ export function TestimonialsView({
   );
 }
 
-export function TrustBadgesView({ content }: ViewProps) {
+export function TrustBadgesView({ content, animate }: ViewProps & { animate?: boolean }) {
   const items = list(content, "items");
   if (items.length === 0) return <EmptyHint label="Add a trust badge" />;
   return (
-    <Grid>
+    <Grid animate={animate}>
       {items.map((item, index) => {
         const Icon = getIcon(item.icon);
         return (
@@ -707,8 +725,7 @@ export function BookingCtaView({ content, enquirySlot }: ViewProps & { enquirySl
 
 export function PackageGridView({
   content,
-  packages,
-}: ViewProps & { packages: PackageCardData[] }) {
+  packages, animate }: ViewProps & { packages: PackageCardData[]; animate?: boolean }) {
   return (
     <div>
       <SectionHeadingView
@@ -721,7 +738,7 @@ export function PackageGridView({
       {packages.length === 0 ? (
         <EmptyHint label="No packages match this selection yet" />
       ) : (
-        <Grid>
+        <Grid animate={animate}>
           {packages.map((pkg) => (
             <Link
               key={pkg.id}
@@ -766,8 +783,7 @@ export function PackageGridView({
 
 export function DestinationGridView({
   content,
-  destinations,
-}: ViewProps & { destinations: DestinationCardData[] }) {
+  destinations, animate }: ViewProps & { destinations: DestinationCardData[]; animate?: boolean }) {
   return (
     <div>
       <SectionHeadingView
@@ -780,7 +796,7 @@ export function DestinationGridView({
       {destinations.length === 0 ? (
         <EmptyHint label="No destinations match this selection yet" />
       ) : (
-        <Grid>
+        <Grid animate={animate}>
           {destinations.map((destination) => (
             <Link
               key={destination.id}
@@ -817,7 +833,7 @@ export function DestinationGridView({
   );
 }
 
-export function BlogGridView({ content, posts }: ViewProps & { posts: BlogCardData[] }) {
+export function BlogGridView({ content, posts, animate }: ViewProps & { posts: BlogCardData[]; animate?: boolean }) {
   return (
     <div>
       <SectionHeadingView
@@ -830,7 +846,7 @@ export function BlogGridView({ content, posts }: ViewProps & { posts: BlogCardDa
       {posts.length === 0 ? (
         <EmptyHint label="No posts to show yet" />
       ) : (
-        <Grid>
+        <Grid animate={animate}>
           {posts.map((post) => (
             <Link
               key={post.id}
