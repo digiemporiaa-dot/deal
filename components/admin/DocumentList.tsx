@@ -5,6 +5,8 @@ import { PageHeader, Card, EmptyState, AdminButtonLink } from "@/components/admi
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { computeTotals, DOC_LABEL, DOC_STATUSES, STATUS_TONE, type DocKind } from "@/lib/documents";
+import { DocumentExport } from "@/components/admin/DocumentExport";
+import { can } from "@/lib/guard";
 
 export async function DocumentList({
   kind,
@@ -17,6 +19,9 @@ export async function DocumentList({
 }) {
   const label = DOC_LABEL[kind];
   const isInvoice = kind === "INVOICE";
+  // The bulk download is not offered to a role that cannot use it; the route
+  // checks the same permission again, so hiding it is presentation only.
+  const mayExport = await can("documents:export");
 
   const docs = await prisma.salesDocument.findMany({
     where: {
@@ -51,9 +56,12 @@ export async function DocumentList({
             : "Send professional quotations to customers and turn them into bookings"
         }
         action={
-          <AdminButtonLink href={`/admin/${label.route}/new`}>
-            <Plus className="h-4 w-4" /> New {label.one.toLowerCase()}
-          </AdminButtonLink>
+          <div className="flex flex-wrap items-start gap-2">
+            {mayExport && <DocumentExport kind={kind} />}
+            <AdminButtonLink href={`/admin/${label.route}/new`}>
+              <Plus className="h-4 w-4" /> New {label.one.toLowerCase()}
+            </AdminButtonLink>
+          </div>
         }
       />
 

@@ -141,3 +141,47 @@ describe("publish guard", () => {
     expect(publishBlocked("CONTENT_MANAGER", "packages:publish", true)).toBeNull();
   });
 });
+
+/**
+ * The finance export is every customer's name, contact details and what they
+ * paid, in one file. It is deliberately narrower than the roles that can read
+ * an invoice on screen, so this pins who holds it.
+ */
+describe("documents:export", () => {
+  it("is held only by the two owner roles", () => {
+    expect(hasPermission("SUPER_ADMIN", "documents:export")).toBe(true);
+    expect(hasPermission("ADMIN", "documents:export")).toBe(true);
+
+    for (const role of [
+      "MANAGER",
+      "BOOKING_MANAGER",
+      "CONTENT_MANAGER",
+      "SALES",
+      "SALES_EXECUTIVE",
+      "EDITOR",
+      "AGENT",
+      "VIEWER",
+    ]) {
+      expect(hasPermission(role, "documents:export"), role).toBe(false);
+    }
+  });
+
+  it("does not follow from being able to read documents", () => {
+    // Several roles can open an invoice; none of them may bulk-download the book.
+    for (const role of ["MANAGER", "BOOKING_MANAGER"]) {
+      expect(hasPermission(role, "documents:view"), role).toBe(true);
+      expect(hasPermission(role, "documents:export"), role).toBe(false);
+    }
+  });
+
+  it("is separate from the general data export", () => {
+    // Granting one must not imply the other in either direction.
+    expect(hasPermission("AGENT", "documents:export")).toBe(false);
+  });
+
+  it("nobody without a role gets it", () => {
+    expect(hasPermission(undefined, "documents:export")).toBe(false);
+    expect(hasPermission(null, "documents:export")).toBe(false);
+    expect(hasPermission("NOT_A_ROLE", "documents:export")).toBe(false);
+  });
+});

@@ -126,7 +126,16 @@ export type Permission =
   | "users:manage"
   | "settings:view"
   | "settings:manage"
-  | "export:data";
+  | "export:data"
+  /**
+   * Bulk download of invoices and quotations.
+   *
+   * Separate from `export:data` on purpose. A finance export is every
+   * customer's name, contact details and what they paid, in one file — a
+   * narrower and more sensitive thing than a package list, and something an
+   * accounts role may need without also being handed a full site backup.
+   */
+  | "documents:export";
 
 const READ_ONLY: Permission[] = [
   "dashboard:view",
@@ -207,6 +216,7 @@ const ALL_PERMISSIONS: Permission[] = [
     "settings:view",
     "settings:manage",
     "export:data",
+    "documents:export",
   ]),
 ];
 
