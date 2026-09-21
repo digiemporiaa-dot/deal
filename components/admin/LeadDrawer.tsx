@@ -15,6 +15,8 @@ import {
   Send,
   StickyNote,
   Trash2,
+  FileSpreadsheet,
+  ReceiptText,
 } from "lucide-react";
 import { Drawer } from "@/components/admin/overlay";
 import {
@@ -30,6 +32,8 @@ import { useToast } from "@/components/admin/Toast";
 import { Input, Select, Textarea } from "@/components/ui/Field";
 import { LEAD_STATUSES, LEAD_PRIORITIES, leadStatusLabel, leadSourceLabel } from "@/lib/crm";
 import { leadStatusTone, priorityTone, humanStatus } from "@/lib/admin-status";
+import { DOC_LABEL, STATUS_TONE, docLabel, docRoute } from "@/lib/documents-shared";
+import { createDocumentFromLead } from "@/app/admin/(panel)/quotations/actions";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { cn, formatDate } from "@/lib/utils";
 import {
@@ -196,6 +200,17 @@ export function LeadDrawer({ leadId, onClose }: { leadId: string | null; onClose
                   label: "Enquiry",
                   content: <Enquiry lead={lead} />,
                 },
+                {
+                  id: "quotes",
+                  label: "Quotes",
+                  badge:
+                    lead.documents.length > 0 ? (
+                      <span className="rounded-full bg-admin-muted px-1.5 text-[10px] tabular-nums text-admin-text-muted">
+                        {lead.documents.length}
+                      </span>
+                    ) : undefined,
+                  content: <Quotes lead={lead} />,
+                },
               ]}
             />
           </div>
@@ -341,6 +356,102 @@ function Pipeline({ current }: { current: string }) {
 }
 
 /* ───────────────────────── overview tab ───────────────────────── */
+
+/**
+ * Quotations and invoices for this lead, and the button that raises a new one.
+ *
+ * This is the money side of a lead. It existed only on the full record page,
+ * so quoting a customer meant leaving the drawer you were working in — the
+ * drawer became the way leads are handled and this did not come with it.
+ */
+function Quotes({ lead }: { lead: LeadDetail }) {
+  const router = useRouter();
+  const [pending, setPending] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const create = async (kind: "QUOTATION" | "INVOICE") => {
+    setPending(kind);
+    setError(null);
+    const result = await createDocumentFromLead(lead.id, kind);
+    if (result.ok) {
+      router.push(`/admin/${DOC_LABEL[kind].route}/${result.id}`);
+    } else {
+      setError(result.error);
+      setPending(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {lead.documents.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-admin-border-strong p-4 text-sm text-admin-text-muted">
+          Nothing raised for this lead yet.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {lead.documents.map((doc) => (
+            <li key={doc.id}>
+              <Link
+                href={`/admin/${docRoute(doc.kind)}/${doc.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-admin px-3 py-2.5 hover:border-brand-300 hover:bg-brand-50/40"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-admin-text">
+                    {doc.number}
+                  </span>
+                  <span className="block truncate text-xs text-admin-text-muted">
+                    {doc.title || docLabel(doc.kind)} ·{" "}
+                    {formatDate(doc.createdAt)}
+                  </span>
+                </span>
+                <StatusBadge tone={STATUS_TONE[doc.status] ?? "slate"}>
+                  {humanStatus(doc.status)}
+                </StatusBadge>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {lead.can.documents && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={pending !== null}
+            onClick={() => void create("QUOTATION")}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+          >
+            {pending === "QUOTATION" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            {pending === "QUOTATION" ? "Creating…" : "Create quotation"}
+          </button>
+          <button
+            type="button"
+            disabled={pending !== null}
+            onClick={() => void create("INVOICE")}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-admin-border-strong px-4 text-sm font-semibold text-admin-text hover:bg-admin-muted disabled:opacity-50"
+          >
+            {pending === "INVOICE" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ReceiptText className="h-4 w-4" />
+            )}
+            {pending === "INVOICE" ? "Creating…" : "Create invoice"}
+          </button>
+        </div>
+      )}
+
+      <p className="text-xs text-admin-text-muted">
+        Either one is prefilled with this lead&rsquo;s details — you just add the prices.
+      </p>
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
 
 type Runner = (action: () => Promise<unknown>, success: string) => Promise<boolean>;
 

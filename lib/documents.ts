@@ -1,17 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { DOC_LABEL, type DocKind } from "@/lib/documents-shared";
 
-export type DocKind = "QUOTATION" | "INVOICE";
-
-export const DOC_LABEL: Record<DocKind, { one: string; many: string; prefix: string; route: string }> = {
-  QUOTATION: { one: "Quotation", many: "Quotations", prefix: "QT", route: "quotations" },
-  INVOICE: { one: "Invoice", many: "Invoices", prefix: "INV", route: "invoices" },
-};
-
-export const DOC_STATUSES: Record<DocKind, string[]> = {
-  QUOTATION: ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"],
-  INVOICE: ["DRAFT", "SENT", "PARTIAL", "PAID", "CANCELLED"],
-};
+// Re-exported so the many server files importing from here keep working; the
+// definitions live in documents-shared.ts because client components need them
+// too and this module is server-only.
+export { DOC_LABEL, DOC_STATUSES, STATUS_TONE, docRoute, docLabel } from "@/lib/documents-shared";
+export type { DocKind } from "@/lib/documents-shared";
 
 export type LineItem = {
   title: string;
@@ -70,14 +65,3 @@ export async function nextDocumentNumber(kind: DocKind): Promise<string> {
   const next = (Number.isFinite(lastSeq) ? lastSeq : 0) + 1;
   return `${prefix}${String(next).padStart(4, "0")}`;
 }
-
-export const STATUS_TONE: Record<string, "slate" | "brand" | "green" | "amber" | "red"> = {
-  DRAFT: "slate",
-  SENT: "brand",
-  ACCEPTED: "green",
-  PAID: "green",
-  PARTIAL: "amber",
-  REJECTED: "red",
-  EXPIRED: "red",
-  CANCELLED: "red",
-};

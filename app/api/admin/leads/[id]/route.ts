@@ -47,9 +47,24 @@ export type LeadDetail = {
     createdAt: string;
     author: string | null;
   }[];
+  /**
+   * Quotations and invoices raised for this lead.
+   *
+   * The drawer is where a lead is worked, so the money side of it has to be
+   * visible from there. It was only on the full record page, which meant the
+   * quickest way to quote a customer was to leave the screen you were on.
+   */
+  documents: {
+    id: string;
+    kind: string;
+    number: string;
+    status: string;
+    title: string | null;
+    createdAt: string;
+  }[];
   members: { id: string; name: string; role: string }[];
   /** What this user may do, so the drawer does not offer a disabled control. */
-  can: { update: boolean; assign: boolean; delete: boolean };
+  can: { update: boolean; assign: boolean; delete: boolean; documents: boolean };
 };
 
 export async function GET(
@@ -73,6 +88,11 @@ export async function GET(
           include: { author: { select: { name: true } } },
         },
         assignedTo: { select: { id: true, name: true } },
+        documents: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { id: true, kind: true, number: true, status: true, title: true, createdAt: true },
+        },
       },
     });
 
@@ -126,10 +146,19 @@ export async function GET(
         author: note.author?.name ?? null,
       })),
       members,
+      documents: lead.documents.map((doc) => ({
+        id: doc.id,
+        kind: doc.kind,
+        number: doc.number,
+        status: doc.status,
+        title: doc.title,
+        createdAt: doc.createdAt.toISOString(),
+      })),
       can: {
         update: hasPermission(actor.role, "leads:update"),
         assign: mayAssign,
         delete: hasPermission(actor.role, "leads:delete"),
+        documents: hasPermission(actor.role, "documents:create"),
       },
     };
 
