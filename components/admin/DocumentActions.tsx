@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Mail, IndianRupee, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
-import { emailDocument, recordPayment, deleteDocument } from "@/app/admin/(panel)/quotations/actions";
+import { Loader2, Mail, IndianRupee, Trash2, CheckCircle2, AlertTriangle, FileText} from "lucide-react";
+import { emailDocument, recordPayment, deleteDocument,
+  createInvoiceFromQuotation } from "@/app/admin/(panel)/quotations/actions";
 import { Input } from "@/components/ui/Field";
 import type { DocKind } from "@/lib/documents";
 
@@ -26,6 +27,21 @@ export function DocumentActions({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
 
   const isInvoice = kind === "INVOICE";
+  // A quotation the customer has agreed to is the normal start of an invoice,
+  // so the action belongs on the quotation rather than only in the new-invoice
+  // chooser. It appears once, at the point it becomes true.
+  const canInvoice = !isInvoice && status === "ACCEPTED";
+
+  const invoiceIt = async () => {
+    setBusy("invoice");
+    setMsg(null);
+    const res = await createInvoiceFromQuotation(id);
+    if (res.ok) router.push(`/admin/invoices/${res.id}`);
+    else {
+      setMsg({ ok: false, text: res.error });
+      setBusy(null);
+    }
+  };
 
   const send = async () => {
     setBusy("email");
@@ -70,6 +86,22 @@ export function DocumentActions({
           {busy === "email" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
           Email to customer
         </button>
+
+        {canInvoice && (
+          <button
+            type="button"
+            onClick={invoiceIt}
+            disabled={busy !== null}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+          >
+            {busy === "invoice" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            {busy === "invoice" ? "Creating…" : "Create invoice from this"}
+          </button>
+        )}
 
         {isInvoice && balance > 0 && (
           <div className="flex items-center gap-2">

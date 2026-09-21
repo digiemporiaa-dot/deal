@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { leadSchema } from "@/lib/validation";
 import { createLead } from "@/lib/services/lead";
 import { sendMail, ADMIN_NOTIFY_EMAIL } from "@/lib/email/mailer";
-import { newLeadAdminEmail } from "@/lib/email/templates";
+import { getSettings } from "@/lib/settings";
+import { newLeadAdminEmail, enquiryReceivedEmail } from "@/lib/email/templates";
 import { limitFor } from "@/lib/rate-limit";
 import { ipFromRequest } from "@/lib/guard";
 import { toSafeError } from "@/lib/errors";
@@ -57,6 +58,27 @@ export async function POST(request: Request) {
       }),
       replyTo: d.email || undefined,
     });
+
+    // And an acknowledgement to the person who actually filled the form. Also
+    // fire-and-forget: a mail server having a bad day must not turn a captured
+    // enquiry into an error page, which would invite them to submit it twice.
+    if (d.email) {
+      const settings = await getSettings();
+      void sendMail({
+        to: d.email,
+        subject: `We have your enquiry, ${d.name}`,
+        html: enquiryReceivedEmail({
+          name: d.name,
+          destination: d.destination,
+          travelDate: d.travelDate,
+          travellers: d.travellers,
+          message: d.message,
+          phone: settings.phone,
+          businessHours: settings.businessHours,
+        }),
+        replyTo: settings.email || undefined,
+      });
+    }
 
     return NextResponse.json({ ok: true, id: lead.id });
   } catch (err) {

@@ -364,3 +364,96 @@ export async function createDocumentFromLead(leadId: string, kind: DocKind): Pro
   revalidatePath(`/admin/${DOC_LABEL[kind].route}`);
   return { ok: true, id: doc.id, number: doc.number };
 }
+
+/**
+ * Raise an invoice from a quotation the customer accepted.
+ *
+ * Retyping an accepted quotation as an invoice is the step where numbers get
+ * lost, so nothing is retyped: the customer, the trip, every line item and
+ * both adjustments are copied across, and the new document starts as a DRAFT
+ * invoice with nothing paid against it yet.
+ *
+ * Only an ACCEPTED quotation converts. A draft or a rejected one becoming an
+ * invoice would be billing for work the customer has not agreed to, and an
+ * expired one usually needs its prices revisited before it is billed.
+ *
+ * The link back to the lead is carried over, so an invoice raised this way
+ * still shows up on that lead's Quotes tab beside the quotation it came from.
+ */
+export async function createInvoiceFromQuotation(quotationId: string): Promise<DocResult> {
+  const guard = await guardAction("documents:create");
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  const quotation = await prisma.salesDocument.findUnique({
+    where: { id: quotationId },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+
+  if (!quotation || quotation.kind !== "QUOTATION") {
+    return { ok: false, error: "Quotation not found" };
+  }
+  if (quotation.status !== "ACCEPTED") {
+    return {
+      ok: false,
+      error: "Only an accepted quotation can be invoiced. Mark it accepted first.",
+    };
+  }
+  if (quotation.items.length === 0) {
+    return { ok: false, error: "That quotation has no line items to invoice." };
+  }
+
+  // Payment terms start from today, not from whenever the quotation was drawn.
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 14);
+
+  const invoice = await prisma.salesDocument.create({
+    data: {
+      kind: "INVOICE",
+      status: "DRAFT",
+      number: await nextDocumentNumber("INVOICE"),
+      leadId: quotation.leadId,
+      bookingId: quotation.bookingId,
+      customerName: quotation.customerName,
+      customerEmail: quotation.customerEmail,
+      customerPhone: quotation.customerPhone,
+      billingAddress: quotation.billingAddress,
+      title: quotation.title,
+      destination: quotation.destination,
+      travelDate: quotation.travelDate,
+      travellers: quotation.travellers,
+      currency: quotation.currency,
+      discount: quotation.discount,
+      taxPercent: quotation.taxPercent,
+      // Deliberately not copied: what was paid against the quotation, and the
+      // date it was valid until. Neither means anything on the invoice.
+      amountPaid: 0,
+      dueDate,
+      notes: quotation.notes,
+      terms: quotation.terms,
+      createdById: guard.actor.id,
+      items: {
+        create: quotation.items.map((item, index) => ({
+          title: item.title,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          sortOrder: index,
+        })),
+      },
+    },
+  });
+
+  await recordActivity({
+    actor: guard.actor,
+    action: "CREATE",
+    entity: "SalesDocument",
+    entityId: invoice.id,
+    description: `Invoiced accepted quotation ${quotation.number} as ${invoice.number}`,
+    metadata: { kind: "INVOICE", number: invoice.number, fromQuotation: quotation.number },
+  });
+
+  revalidatePath("/admin/invoices");
+  revalidatePath(`/admin/invoices/${invoice.id}`);
+  revalidatePath(`/admin/quotations/${quotation.id}`);
+  return { ok: true, id: invoice.id, number: invoice.number };
+}

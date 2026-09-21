@@ -23,6 +23,15 @@ function shell(title: string, body: string): string {
 const p = (text: string) =>
   `<p style="margin:0 0 12px;line-height:1.6;font-size:14px">${text}</p>`;
 
+/** For the few places a customer's own words are put into the markup. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function row(label: string, value: string): string {
   return `<tr>
     <td style="padding:6px 0;color:#6b7280;font-size:13px">${label}</td>
@@ -74,6 +83,44 @@ export function paymentFailedEmail(d: { customerName: string; bookingNumber: str
     "Payment could not be completed",
     `${p(`Hi ${d.customerName}, your payment for booking <b>${d.bookingNumber}</b> did not go through.`)}
      ${p("No amount has been charged. You can retry the payment from your booking summary, or contact us and we will help you complete it.")}`,
+  );
+}
+
+/**
+ * The acknowledgement a customer gets for their own enquiry.
+ *
+ * Until now an enquiry emailed the office and nothing at all to the person who
+ * sent it, so from their side the form swallowed their details in silence.
+ * It repeats back what they asked for, so they can see it arrived intact, and
+ * says when somebody will answer.
+ *
+ * Deliberately plain: no prices, no booking link, nothing that reads as a
+ * confirmed arrangement. Nothing has been agreed at this point.
+ */
+export function enquiryReceivedEmail(d: {
+  name: string;
+  destination?: string | null;
+  travelDate?: Date | string | null;
+  travellers?: number | null;
+  message?: string | null;
+  phone?: string | null;
+  businessHours?: string | null;
+}): string {
+  const details = [
+    d.destination ? row("Destination", d.destination) : "",
+    d.travelDate ? row("Travel date", formatDate(d.travelDate)) : "",
+    d.travellers ? row("Travellers", String(d.travellers)) : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  return shell(
+    "We have your enquiry",
+    `${p(`Hi ${d.name}, thank you for getting in touch. One of our travel experts will be in touch${d.businessHours ? ` during our working hours (${d.businessHours})` : " shortly"}.`)}
+     ${details ? `<table style="width:100%;border-collapse:collapse;margin:12px 0">${details}</table>` : ""}
+     ${d.message ? p(`<span style="color:#6b7280">What you told us:</span><br>${escapeHtml(d.message)}`) : ""}
+     ${p("If any of this is wrong, simply reply to this email and we will correct it.")}
+     ${d.phone ? p(`In a hurry? Call us on ${escapeHtml(d.phone)}.`) : ""}`,
   );
 }
 
