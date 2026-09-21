@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEAD_STATUSES } from "@/lib/crm";
 
 // ── Shared primitives ────────────────────────────────────────
 const phoneSchema = z
@@ -313,13 +314,84 @@ export const leadQuerySchema = z.object({
   owner: z.string().trim().max(60).optional(),
   budget: z.string().trim().max(60).optional(),
   due: z.enum(["1", "overdue", "today", "upcoming"]).optional(),
+  /** How warm the lead is, from the stored score. */
+  band: z.enum(["HOT", "WARM", "COLD"]).optional(),
+  /** One tag; matched against the JSON-encoded tag list. */
+  tag: z.string().trim().max(40).optional(),
+  /** "open" hides won, lost and junk; "closed" shows only those. */
+  state: z.enum(["open", "closed"]).optional(),
   from: dateString,
   to: dateString,
-  sort: z.enum(["newest", "oldest", "followup", "activity"]).default("followup"),
+  sort: z.enum(["newest", "oldest", "followup", "activity", "score"]).default("followup"),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   perPage: z.coerce.number().int().min(1).max(200).default(25),
 });
 export type LeadQuery = z.infer<typeof leadQuerySchema>;
+
+// ── CRM: follow-ups, conversion, qualification ───────────────
+
+/**
+ * A date-time from a form. Accepts both `YYYY-MM-DD` and the
+ * `YYYY-MM-DDTHH:mm` an <input type="datetime-local"> produces, and rejects
+ * anything that is not a real instant — an invalid Date reaching Prisma is a
+ * 500, not a validation error.
+ */
+const dateTimeString = z
+  .string()
+  .trim()
+  .min(1, "Pick a date")
+  .max(40)
+  .refine((value) => !Number.isNaN(new Date(value).getTime()), "Enter a valid date");
+
+export const followUpSchema = z.object({
+  leadId: z.string().trim().min(1).max(40),
+  dueAt: dateTimeString,
+  type: z.enum(["CALL", "WHATSAPP", "EMAIL", "MEETING", "TASK"]).default("CALL"),
+  title: z.string().trim().min(2, "Say what the follow-up is for").max(200),
+  note: z.string().trim().max(2000).optional().or(z.literal("")),
+  /** Verified against a real active user server-side; never trusted as given. */
+  assignedToId: z.string().trim().max(40).optional().or(z.literal("")),
+});
+export type FollowUpInput = z.infer<typeof followUpSchema>;
+
+export const completeFollowUpSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  outcome: z.string().trim().max(2000).optional().or(z.literal("")),
+  status: z.enum(["DONE", "CANCELLED"]).default("DONE"),
+});
+
+export const rescheduleFollowUpSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  dueAt: dateTimeString,
+});
+
+/** Extra qualification detail captured on the lead workspace. */
+export const leadQualificationSchema = z.object({
+  destination: z.string().trim().max(120).optional().or(z.literal("")),
+  destinationId: z.string().trim().max(40).optional().or(z.literal("")),
+  packageId: z.string().trim().max(40).optional().or(z.literal("")),
+  travelDate: z.string().trim().max(40).optional().or(z.literal("")),
+  returnDate: z.string().trim().max(40).optional().or(z.literal("")),
+  adults: z.coerce.number().int().min(0).max(50).optional(),
+  children: z.coerce.number().int().min(0).max(50).optional(),
+  rooms: z.coerce.number().int().min(0).max(50).optional(),
+  budget: z.string().trim().max(60).optional().or(z.literal("")),
+  tripType: z.string().trim().max(40).optional().or(z.literal("")),
+  tags: z.array(z.string().trim().max(40)).max(20).optional(),
+});
+export type LeadQualificationInput = z.infer<typeof leadQualificationSchema>;
+
+/** Moving a lead through the pipeline, with the reason a close needs. */
+export const leadStatusSchema = z
+  .object({
+    id: z.string().trim().min(1).max(40),
+    status: z.enum(LEAD_STATUSES),
+    reason: z.string().trim().max(500).optional().or(z.literal("")),
+  })
+  .refine((value) => value.status !== "LOST" || Boolean(value.reason), {
+    message: "Say why the lead was lost",
+    path: ["reason"],
+  });
 
 export const bookingQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),

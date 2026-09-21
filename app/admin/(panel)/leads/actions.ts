@@ -11,10 +11,37 @@ import { leadReplyEmail } from "@/lib/email/lead-email";
 import { leadAssignedEmail } from "@/lib/email/crm-emails";
 import { getSettings } from "@/lib/settings";
 import { isLeadOwnerOnly } from "@/lib/permissions";
-import { LEAD_STATUSES, LEAD_PRIORITIES } from "@/lib/crm";
+import { LEAD_STATUSES, LEAD_PRIORITIES, leadStatusLabel, normalizePhone, WON_STATUS } from "@/lib/crm";
+import { rescoreLead } from "@/lib/services/lead-scoring";
+import { convertLeadToCustomer, recordStatusChange } from "@/lib/services/lead-conversion";
+import { findDuplicateLeads } from "@/lib/services/lead-dedupe";
+import {
+  createFollowUp as createFollowUpTask,
+  completeFollowUp as completeFollowUpTask,
+  rescheduleFollowUp as rescheduleFollowUpTask,
+  deleteFollowUp as deleteFollowUpTask,
+  syncNextFollowUp,
+  followUpTypeLabel,
+} from "@/lib/services/follow-up";
+import {
+  followUpSchema,
+  completeFollowUpSchema,
+  rescheduleFollowUpSchema,
+} from "@/lib/validation";
 import type { LeadStatus } from "@/types/db-enums";
 
 const STATUSES: readonly LeadStatus[] = LEAD_STATUSES;
+
+/**
+ * How many leads may be converted in one bulk action.
+ *
+ * Each conversion is its own transaction — it may create a customer, write
+ * history and stand follow-ups down — so this is deliberately far below the
+ * 200 the other bulk statuses allow. Converting 200 leads in one request
+ * would time out half-way and leave the rest untouched with no way to tell
+ * which.
+ */
+const BULK_CONVERT_LIMIT = 25;
 
 /**
  * Confirms the signed-in user may act on this lead.
@@ -42,7 +69,15 @@ async function authorizeLead(
   return guard;
 }
 
-/** Write one entry to the lead's activity timeline. */
+/**
+ * Write one entry to the lead's activity timeline.
+ *
+ * Every interaction in this file funnels through here, which makes it the one
+ * honest place to refresh the score: engagement and recency are both scoring
+ * inputs, so a lead that was just called is warmer than one that was not.
+ * `rescoreLead` swallows its own failures — a scoring problem must never roll
+ * back the note that triggered it.
+ */
 async function logActivity(input: {
   leadId: string;
   body: string;
@@ -68,6 +103,7 @@ async function logActivity(input: {
     where: { id: input.leadId },
     data: { lastActivityAt: new Date() },
   });
+  await rescoreLead(input.leadId);
 }
 
 /** A human has engaged with this lead — stop the automatic nurture emails. */
@@ -134,10 +170,19 @@ export async function createLead(input: z.infer<typeof createLeadSchema>) {
 
     const travelDate = data.travelDate ? new Date(data.travelDate) : null;
 
+    // Flagged for the person typing it in, never blocked — a repeat customer
+    // is good news, and refusing the entry would send them back to a notebook.
+    const duplicates = await findDuplicateLeads({
+      phone: data.phone,
+      email: data.email || null,
+      limit: 3,
+    });
+
     const lead = await prisma.lead.create({
       data: {
         name: data.name,
         phone: data.phone,
+        phoneKey: normalizePhone(data.phone),
         email: data.email || null,
         destination: data.destination || null,
         travelDate: travelDate && !Number.isNaN(travelDate.getTime()) ? travelDate : null,
@@ -152,6 +197,17 @@ export async function createLead(input: z.infer<typeof createLeadSchema>) {
       },
       select: { id: true, name: true },
     });
+
+    if (duplicates.isDuplicate) {
+      await logActivity({
+        leadId: lead.id,
+        type: "DUPLICATE",
+        authorId: guard.actor.id,
+        body: `Possible duplicate of: ${duplicates.leads
+          .map((row) => `${row.name} (${row.statusLabel})`)
+          .join(", ")}`,
+      });
+    }
 
     await logActivity({
       leadId: lead.id,
@@ -169,13 +225,36 @@ export async function createLead(input: z.infer<typeof createLeadSchema>) {
     });
 
     revalidatePath("/admin/leads");
-    return { ok: true as const, id: lead.id };
+    return {
+      ok: true as const,
+      id: lead.id,
+      duplicates: duplicates.leads.map((row) => ({
+        id: row.id,
+        name: row.name,
+        statusLabel: row.statusLabel,
+        assignedToName: row.assignedToName,
+      })),
+    };
   } catch (err) {
     return { ok: false as const, error: toSafeError(err, "action.createLead").message };
   }
 }
 
-export async function updateLeadStatus(id: string, status: string) {
+/**
+ * Move a lead through the pipeline.
+ *
+ * Every move is recorded in `LeadStatusChange` as well as on the timeline, so
+ * stage duration and win/loss velocity can be measured rather than inferred
+ * from `updatedAt`. Two statuses do more than change a word:
+ *
+ *   Won  — converts the lead into a customer, reusing an existing record when
+ *          the email or phone already belongs to one.
+ *   Lost — requires a reason, which is stored on the lead so the loss can be
+ *          reported on instead of forgotten.
+ *
+ * Closing a lead in any way also stands its follow-up queue down.
+ */
+export async function updateLeadStatus(id: string, status: string, reason?: string) {
   const guard = await authorizeLead(id);
   if (!guard.ok) return { ok: false as const, error: guard.error };
   if (!STATUSES.includes(status as LeadStatus)) return { ok: false as const, error: "Invalid status" };
@@ -183,29 +262,110 @@ export async function updateLeadStatus(id: string, status: string) {
   const current = await prisma.lead.findUnique({ where: { id }, select: { status: true, name: true } });
   if (!current) return { ok: false as const, error: "Lead not found" };
 
-  await prisma.lead.update({ where: { id }, data: { status: status as LeadStatus } });
+  const note = reason?.trim().slice(0, 500) || null;
+  if (status === "LOST" && !note) {
+    return { ok: false as const, error: "Say why the lead was lost." };
+  }
+
+  if (current.status === status) {
+    // Nothing moved. Still stop the sequence — a human has clearly engaged.
+    await stopSequence(id);
+    return { ok: true as const, changed: false };
+  }
+
+  let convertedCustomerId: string | null = null;
+
+  if (status === WON_STATUS) {
+    // Conversion sets the status, writes the history entry and closes the
+    // follow-ups in one transaction, so it must not be done twice.
+    const result = await convertLeadToCustomer({ leadId: id, actor: guard.actor, reason: note });
+    if (!result.ok) return { ok: false as const, error: result.error };
+    convertedCustomerId = result.customerId;
+  } else {
+    await recordStatusChange({
+      leadId: id,
+      fromStatus: current.status,
+      toStatus: status,
+      actor: guard.actor,
+      reason: note,
+    });
+  }
+
   await stopSequence(id);
 
-  if (current.status !== status) {
-    await logActivity({
-      leadId: id,
-      type: "STATUS",
-      authorId: guard.actor.id,
-      body: `Status changed from ${current.status.replace(/_/g, " ")} to ${status.replace(/_/g, " ")}`,
-    });
+  await logActivity({
+    leadId: id,
+    type: "STATUS",
+    authorId: guard.actor.id,
+    body: note
+      ? `Status changed from ${leadStatusLabel(current.status)} to ${leadStatusLabel(status)} — ${note}`
+      : `Status changed from ${leadStatusLabel(current.status)} to ${leadStatusLabel(status)}`,
+  });
+
+  await recordActivity({
+    actor: guard.actor,
+    action: "STATUS_CHANGE",
+    entity: "Lead",
+    entityId: id,
+    description: `Moved lead "${current.name}" to ${leadStatusLabel(status)}`,
+    metadata: { from: current.status, to: status, reason: note, customerId: convertedCustomerId },
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${id}`);
+  if (convertedCustomerId) revalidatePath("/admin/customers");
+  return { ok: true as const, changed: true, customerId: convertedCustomerId };
+}
+
+/**
+ * Convert a lead into a customer without going through the status dropdown.
+ *
+ * Same code path as moving to Won, and just as safe to call twice: the second
+ * call reports the customer that already exists and changes nothing.
+ */
+export async function convertLead(id: string, reason?: string) {
+  const guard = await authorizeLead(id);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const lead = await prisma.lead.findUnique({ where: { id }, select: { name: true, status: true } });
+  if (!lead) return { ok: false as const, error: "Lead not found" };
+
+  const result = await convertLeadToCustomer({
+    leadId: id,
+    actor: guard.actor,
+    reason: reason?.trim().slice(0, 500) || null,
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  if (result.changed) {
+    await stopSequence(id);
     await recordActivity({
       actor: guard.actor,
       action: "STATUS_CHANGE",
       entity: "Lead",
       entityId: id,
-      description: `Moved lead "${current.name}" to ${status.replace(/_/g, " ")}`,
-      metadata: { from: current.status, to: status },
+      description: `Converted lead "${lead.name}" to customer ${result.customerName}`,
+      metadata: {
+        from: lead.status,
+        to: WON_STATUS,
+        customerId: result.customerId,
+        matchedExisting: result.matchedExisting,
+      },
     });
+    await rescoreLead(id);
   }
 
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${id}`);
-  return { ok: true as const };
+  revalidatePath("/admin/customers");
+
+  return {
+    ok: true as const,
+    customerId: result.customerId,
+    customerName: result.customerName,
+    changed: result.changed,
+    matchedExisting: result.matchedExisting,
+  };
 }
 
 /** Set how urgent a lead is. Drives the CRM priority filter. */
@@ -339,28 +499,207 @@ export async function sendLeadEmail(leadId: string, subject: string, message: st
       };
 }
 
-/** Set or clear the next follow-up date. Pass an empty string to clear it. */
+/** How a follow-up date reads on the timeline. */
+function formatDue(date: Date): string {
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * Set or clear the next follow-up date. Pass an empty string to clear it.
+ *
+ * Kept for the existing quick-date control, but it no longer writes
+ * `Lead.nextFollowUpAt` itself — that column is derived from the pending
+ * follow-up tasks now. Setting a date creates a task; clearing cancels the
+ * pending ones. Either way the column ends up right, and the lead gains a
+ * record of what the follow-up was for.
+ */
 export async function setLeadFollowUp(leadId: string, date: string) {
   const guard = await authorizeLead(leadId);
   if (!guard.ok) return { ok: false as const, error: guard.error };
 
   if (!date) {
-    await prisma.lead.update({ where: { id: leadId }, data: { nextFollowUpAt: null } });
-    await logActivity({ leadId, type: "FOLLOWUP", body: "Follow-up reminder cleared", authorId: guard.actor.id });
+    const cancelled = await prisma.leadFollowUp.updateMany({
+      where: { leadId, status: "PENDING" },
+      data: { status: "CANCELLED", completedAt: new Date(), outcome: "Reminder cleared" },
+    });
+    await syncNextFollowUp(leadId);
+    if (cancelled.count > 0) {
+      await logActivity({
+        leadId,
+        type: "FOLLOWUP",
+        body: "Follow-up reminder cleared",
+        authorId: guard.actor.id,
+      });
+    }
   } else {
     const when = new Date(date);
     if (Number.isNaN(when.getTime())) return { ok: false as const, error: "Invalid date" };
-    await prisma.lead.update({ where: { id: leadId }, data: { nextFollowUpAt: when } });
+
+    const created = await createFollowUpTask({
+      leadId,
+      dueAt: when,
+      type: "CALL",
+      title: "Follow up",
+      createdById: guard.actor.id,
+    });
+    if (!created.ok) return { ok: false as const, error: created.error };
+
     await logActivity({
       leadId,
       type: "FOLLOWUP",
       authorId: guard.actor.id,
-      body: `Follow-up set for ${when.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
+      body: `Follow-up set for ${formatDue(when)}`,
     });
   }
 
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${leadId}`);
+  return { ok: true as const };
+}
+
+/* ─────────────────────── follow-up tasks ─────────────────────── */
+
+/**
+ * Schedule a named piece of follow-up work.
+ *
+ * `assignedToId` arrives from a form and is never trusted: the service
+ * verifies it against a real active user and falls back to the lead's owner.
+ * A role that works only its own pipeline is stopped by `authorizeLead`
+ * before any of that, and cannot park work on somebody else's lead.
+ */
+export async function createLeadFollowUp(input: unknown) {
+  const parsed = followUpSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0]?.message || "Check the form." };
+  }
+  const data = parsed.data;
+
+  const guard = await authorizeLead(data.leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  // An owner-only role may schedule work, but only on itself.
+  const assignedToId = isLeadOwnerOnly(guard.actor.role)
+    ? guard.actor.id
+    : data.assignedToId || null;
+
+  const created = await createFollowUpTask({
+    leadId: data.leadId,
+    dueAt: new Date(data.dueAt),
+    type: data.type,
+    title: data.title,
+    note: data.note || null,
+    assignedToId,
+    createdById: guard.actor.id,
+  });
+  if (!created.ok) return { ok: false as const, error: created.error };
+
+  await logActivity({
+    leadId: data.leadId,
+    type: "FOLLOWUP",
+    authorId: guard.actor.id,
+    body: `${followUpTypeLabel(data.type)} scheduled for ${formatDue(created.followUp.dueAt)} — ${created.followUp.title}`,
+  });
+  await stopSequence(data.leadId);
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${data.leadId}`);
+  return { ok: true as const, id: created.followUp.id };
+}
+
+/** Mark a follow-up done (or cancelled), with what came of it. */
+export async function completeLeadFollowUp(input: unknown) {
+  const parsed = completeFollowUpSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0]?.message || "Check the form." };
+  }
+  const data = parsed.data;
+
+  // The follow-up id comes from the client, so the lead it belongs to is read
+  // from the database and authorised — not taken from the request.
+  const followUp = await prisma.leadFollowUp.findUnique({
+    where: { id: data.id },
+    select: { leadId: true },
+  });
+  if (!followUp) return { ok: false as const, error: "Follow-up not found" };
+
+  const guard = await authorizeLead(followUp.leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const result = await completeFollowUpTask({
+    id: data.id,
+    outcome: data.outcome || null,
+    status: data.status,
+  });
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  // Only log when this call is what closed it — a retry must not write a
+  // second timeline entry.
+  if (result.changed) {
+    await logActivity({
+      leadId: result.leadId,
+      type: "FOLLOWUP",
+      authorId: guard.actor.id,
+      body:
+        data.status === "CANCELLED"
+          ? `Cancelled follow-up: ${result.title}`
+          : `Completed follow-up: ${result.title}${data.outcome ? ` — ${data.outcome}` : ""}`,
+    });
+  }
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${result.leadId}`);
+  return { ok: true as const, changed: result.changed };
+}
+
+/** Push a pending follow-up to a new date. */
+export async function rescheduleLeadFollowUp(input: unknown) {
+  const parsed = rescheduleFollowUpSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0]?.message || "Check the form." };
+  }
+  const data = parsed.data;
+
+  const followUp = await prisma.leadFollowUp.findUnique({
+    where: { id: data.id },
+    select: { leadId: true, title: true },
+  });
+  if (!followUp) return { ok: false as const, error: "Follow-up not found" };
+
+  const guard = await authorizeLead(followUp.leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const when = new Date(data.dueAt);
+  const result = await rescheduleFollowUpTask({ id: data.id, dueAt: when });
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  await logActivity({
+    leadId: result.leadId,
+    type: "FOLLOWUP",
+    authorId: guard.actor.id,
+    body: `Moved "${followUp.title}" to ${formatDue(when)}`,
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${result.leadId}`);
+  return { ok: true as const };
+}
+
+/** Remove a follow-up created by mistake. */
+export async function deleteLeadFollowUp(id: string) {
+  const followUp = await prisma.leadFollowUp.findUnique({
+    where: { id },
+    select: { leadId: true },
+  });
+  if (!followUp) return { ok: false as const, error: "Follow-up not found" };
+
+  const guard = await authorizeLead(followUp.leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const result = await deleteFollowUpTask(id);
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${result.leadId}`);
   return { ok: true as const };
 }
 
@@ -448,33 +787,76 @@ export async function deleteLead(id: string) {
   }
 }
 
-/** Apply one status to several leads at once from the CRM list. */
-export async function bulkUpdateLeadStatus(ids: string[], status: string) {
+/**
+ * Apply one status to several leads at once from the CRM list.
+ *
+ * Moving to Won is not a field update — it creates or links a customer per
+ * lead — so it runs one conversion at a time and is capped lower than the
+ * other statuses. Everything else is a single `updateMany` plus one history
+ * row per lead that actually moved.
+ */
+export async function bulkUpdateLeadStatus(ids: string[], status: string, reason?: string) {
   const guard = await guardAction("leads:update");
   if (!guard.ok) return { ok: false as const, error: guard.error };
   if (!STATUSES.includes(status as LeadStatus)) return { ok: false as const, error: "Invalid status" };
 
-  const unique = [...new Set(ids)].filter(Boolean).slice(0, 200);
+  const converting = status === WON_STATUS;
+  const unique = [...new Set(ids)].filter(Boolean).slice(0, converting ? BULK_CONVERT_LIMIT : 200);
   if (unique.length === 0) return { ok: false as const, error: "Select at least one lead" };
 
+  const note = reason?.trim().slice(0, 500) || null;
+  if (status === "LOST" && !note) {
+    return { ok: false as const, error: "Say why these leads were lost." };
+  }
+
   // Owner-restricted roles may only touch their own leads, whatever ids
-  // arrive from the browser.
+  // arrive from the browser. Re-read rather than trusted.
   const where = isLeadOwnerOnly(guard.actor.role)
     ? { id: { in: unique }, assignedToId: guard.actor.id }
     : { id: { in: unique } };
 
-  const result = await prisma.lead.updateMany({ where, data: { status } });
+  // Only the leads that are actually moving, so the history table does not
+  // fill with no-op entries and the count is honest.
+  const moving = await prisma.lead.findMany({
+    where: { ...where, NOT: { status } },
+    select: { id: true, status: true },
+  });
+
+  if (moving.length === 0) {
+    return { ok: true as const, count: 0, requested: unique.length };
+  }
+
+  let count = 0;
+
+  if (converting) {
+    for (const lead of moving) {
+      const result = await convertLeadToCustomer({ leadId: lead.id, actor: guard.actor, reason: note });
+      if (result.ok && result.changed) count += 1;
+    }
+  } else {
+    for (const lead of moving) {
+      await recordStatusChange({
+        leadId: lead.id,
+        fromStatus: lead.status,
+        toStatus: status,
+        actor: guard.actor,
+        reason: note,
+      });
+      count += 1;
+    }
+  }
 
   await recordActivity({
     actor: guard.actor,
     action: "STATUS_CHANGE",
     entity: "Lead",
-    description: `Bulk-updated ${result.count} lead(s) to ${status.replace(/_/g, " ")}`,
-    metadata: { count: result.count, requested: unique.length, status },
+    description: `Bulk-updated ${count} lead(s) to ${leadStatusLabel(status)}`,
+    metadata: { count, requested: unique.length, status, reason: note },
   });
 
   revalidatePath("/admin/leads");
-  return { ok: true as const, count: result.count };
+  if (converting) revalidatePath("/admin/customers");
+  return { ok: true as const, count, requested: unique.length };
 }
 
 /** Hand several leads to one team member at once. */

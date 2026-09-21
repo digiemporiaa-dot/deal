@@ -63,7 +63,7 @@ import type { LeadDetail } from "@/app/api/admin/leads/[id]/route";
  * component never becomes a second, weaker path to the same data.
  */
 
-const STAGES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "CONVERTED"] as const;
+const STAGES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "CONVERTED"] as const;
 
 const NOTE_META: Record<string, { label: string; icon: React.ReactNode; tone: "slate" | "brand" | "green" | "amber" | "purple" }> = {
   NOTE: { label: "Note", icon: <StickyNote className="h-3.5 w-3.5" />, tone: "slate" },

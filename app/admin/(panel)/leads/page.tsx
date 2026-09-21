@@ -127,7 +127,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
       />
 
       {/* Pipeline. Each tile is also the status filter. */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {LEAD_STATUSES.map((status) => {
           const active = query.status === status;
           return (

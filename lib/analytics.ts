@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { toNumber } from "@/lib/utils";
-import { conversionRate } from "@/lib/crm";
+import { conversionRate, CLOSED_STATUSES } from "@/lib/crm";
 import type { DashboardQuery } from "@/lib/validation";
 import type { Prisma } from "@prisma/client";
 
@@ -180,7 +180,7 @@ export async function getDashboardMetrics(query: DashboardQuery): Promise<Dashbo
     prisma.lead.count({
       where: {
         nextFollowUpAt: { not: null, lt: startOfDay(now) },
-        status: { notIn: ["CONVERTED", "LOST"] },
+        status: { notIn: [...CLOSED_STATUSES] },
       },
     }),
     prisma.booking.groupBy({
@@ -471,19 +471,29 @@ export async function getConversionFunnel(range: DateRange): Promise<FunnelStage
   ]);
 
   const count = (status: string) => rows.find((row) => row.status === status)?._count._all ?? 0;
-  const total = rows.reduce((sum, row) => sum + row._count._all, 0);
+  const allStatuses = rows.reduce((sum, row) => sum + row._count._all, 0);
 
   // Each stage counts everything that reached it or beyond, which is what
   // makes a funnel read as a funnel.
+  // Junk was never an enquiry, so it is taken out of the top of the funnel
+  // rather than counted as one that failed to progress.
+  const total = allStatuses - count("JUNK");
   const contacted = total - count("NEW");
-  const qualified = count("QUALIFIED") + count("PROPOSAL_SENT") + count("FOLLOW_UP") + count("CONVERTED");
-  const proposed = count("PROPOSAL_SENT") + count("CONVERTED");
+  const qualified =
+    count("QUALIFIED") +
+    count("PROPOSAL_SENT") +
+    count("NEGOTIATION") +
+    count("FOLLOW_UP") +
+    count("CONVERTED");
+  const proposed = count("PROPOSAL_SENT") + count("NEGOTIATION") + count("CONVERTED");
+  const negotiating = count("NEGOTIATION") + count("CONVERTED");
 
   return [
     { stage: "Enquiries", count: total },
     { stage: "Contacted", count: Math.max(0, contacted) },
     { stage: "Qualified", count: qualified },
-    { stage: "Proposal sent", count: proposed },
+    { stage: "Proposal", count: proposed },
+    { stage: "Negotiation", count: negotiating },
     { stage: "Won", count: count("CONVERTED") },
     { stage: "Bookings", count: bookings },
   ];

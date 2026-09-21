@@ -2,7 +2,7 @@
   "name": "vacationdeal",
   "version": "1.0.0",
   "private": true,
-  "description": "Vacationdeal — Travel Agency Management & Booking Platform",
+  "description": "Vacationdeal \u2014 Travel Agency Management & Booking Platform",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -20,6 +20,8 @@
     "test:watch": "vitest",
     "db:upgrade": "psql \"$DATABASE_URL\" -f prisma/sql/2026-09-19-platform-upgrade.sql",
     "db:upgrade:cms": "psql \"$DATABASE_URL\" -f prisma/sql/2026-09-19-page-builder.sql",
+    "db:upgrade:crm": "psql \"$DATABASE_URL\" -f prisma/sql/2026-09-21-crm-upgrade.sql",
+    "db:backfill-crm": "tsx prisma/backfill-crm.ts",
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "prisma": {

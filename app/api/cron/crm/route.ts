@@ -5,6 +5,8 @@ import { logger } from "@/lib/logger";
 import { ipFromRequest } from "@/lib/guard";
 import { sendMail } from "@/lib/email/mailer";
 import { getSettings } from "@/lib/settings";
+import { CLOSED_STATUSES } from "@/lib/crm";
+import { rescoreAllLeads } from "@/lib/services/lead-scoring";
 import { followUpDigestEmail, sequenceEmail, SEQUENCE_STEPS } from "@/lib/email/crm-emails";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,8 @@ function fmt(d: Date): string {
  *     emails (after 1 hour, 2 days, 5 days). Any human action stops it.
  *  2. Follow-up digest — each team member gets one email listing their
  *     overdue and due-today leads.
+ *  3. Score refresh — lead scores are stored, so they drift as travel dates
+ *     approach. This brings them back in line.
  */
 export async function GET(request: Request) {
   // Vercel Cron signs its calls with CRON_SECRET in the Authorization header.
@@ -122,7 +126,7 @@ export async function GET(request: Request) {
   const dueLeads = await prisma.lead.findMany({
     where: {
       nextFollowUpAt: { not: null, lte: endOfToday },
-      status: { notIn: ["CONVERTED", "LOST"] },
+      status: { notIn: [...CLOSED_STATUSES] },
       assignedToId: { not: null },
     },
     select: {
@@ -163,6 +167,31 @@ export async function GET(request: Request) {
     if (sent) digestsSent += 1;
   }
 
-  logger.info("cron.crm_completed", { sequenceSent, digestsSent, checked: candidates.length });
-  return NextResponse.json({ ok: true, sequenceSent, digestsSent, checked: candidates.length });
+  // 3. Refresh lead scores.
+  //
+  // Scores are stored so the CRM can sort and filter on them in the database,
+  // which means they go stale on their own: a trip that was six months out in
+  // March is three weeks out in August, and nobody edited the lead. Runs last
+  // and never fails the request — the emails above are the job that matters,
+  // and a stale score is a cosmetic problem.
+  let rescored = { scanned: 0, changed: 0 };
+  try {
+    rescored = await rescoreAllLeads();
+  } catch (error) {
+    logger.error("cron.rescore_failed", { error });
+  }
+
+  logger.info("cron.crm_completed", {
+    sequenceSent,
+    digestsSent,
+    checked: candidates.length,
+    rescored: rescored.changed,
+  });
+  return NextResponse.json({
+    ok: true,
+    sequenceSent,
+    digestsSent,
+    checked: candidates.length,
+    rescored: rescored.changed,
+  });
 }

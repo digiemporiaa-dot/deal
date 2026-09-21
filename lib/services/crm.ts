@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { isLeadOwnerOnly } from "@/lib/permissions";
+import { CLOSED_STATUSES } from "@/lib/crm";
 import type { AdminActor } from "@/lib/guard";
 import type { LeadQuery } from "@/lib/validation";
 import type { Prisma } from "@prisma/client";
@@ -58,6 +59,18 @@ export function buildLeadWhere(query: LeadQuery, actor: AdminActor | null): Pris
     and.push({ destination: { contains: query.destination, mode: "insensitive" } });
   }
   if (query.budget) and.push({ budget: { contains: query.budget, mode: "insensitive" } });
+  if (query.band) and.push({ scoreBand: query.band });
+
+  if (query.state === "open") and.push({ status: { notIn: [...CLOSED_STATUSES] } });
+  else if (query.state === "closed") and.push({ status: { in: [...CLOSED_STATUSES] } });
+
+  if (query.tag) {
+    // Tags live JSON-encoded in a text column (the TravelPackage convention),
+    // so the match is on the quoted token rather than the bare word — `"Goa"`
+    // must not match a tag called "Goatrip". Case-insensitive because nobody
+    // types a tag the same way twice.
+    and.push({ tags: { contains: `"${query.tag}"`, mode: "insensitive" } });
+  }
 
   const from = dayBoundary(query.from || undefined, false);
   const to = dayBoundary(query.to || undefined, true);
@@ -69,20 +82,20 @@ export function buildLeadWhere(query: LeadQuery, actor: AdminActor | null): Pris
   if (query.due === "overdue") {
     and.push({
       nextFollowUpAt: { not: null, lt: startOfToday() },
-      status: { notIn: ["CONVERTED", "LOST"] },
+      status: { notIn: [...CLOSED_STATUSES] },
     });
   } else if (query.due === "today") {
     and.push({
       nextFollowUpAt: { gte: startOfToday(), lte: endOfToday() },
-      status: { notIn: ["CONVERTED", "LOST"] },
+      status: { notIn: [...CLOSED_STATUSES] },
     });
   } else if (query.due === "upcoming") {
-    and.push({ nextFollowUpAt: { gt: endOfToday() }, status: { notIn: ["CONVERTED", "LOST"] } });
+    and.push({ nextFollowUpAt: { gt: endOfToday() }, status: { notIn: [...CLOSED_STATUSES] } });
   } else if (query.due === "1") {
     // Legacy "due today or earlier" link, kept so saved URLs keep working.
     and.push({
       nextFollowUpAt: { not: null, lte: endOfToday() },
-      status: { notIn: ["CONVERTED", "LOST"] },
+      status: { notIn: [...CLOSED_STATUSES] },
     });
   }
 
@@ -116,6 +129,9 @@ function orderFor(sort: LeadQuery["sort"]): Prisma.LeadOrderByWithRelationInput[
       return [{ createdAt: "asc" }];
     case "activity":
       return [{ lastActivityAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }];
+    case "score":
+      // Hottest first, and among equals the one nobody has touched recently.
+      return [{ score: "desc" }, { nextFollowUpAt: { sort: "asc", nulls: "last" } }];
     case "followup":
     default:
       // Whatever needs chasing soonest, first.
@@ -140,6 +156,9 @@ export type LeadListRow = Prisma.LeadGetPayload<{
     nextFollowUpAt: true;
     lastActivityAt: true;
     assignedToId: true;
+    score: true;
+    scoreBand: true;
+    tags: true;
     assignedTo: { select: { id: true; name: true } };
     _count: { select: { notes: true } };
   };
@@ -173,6 +192,9 @@ export async function listLeads(query: LeadQuery, actor: AdminActor | null) {
         nextFollowUpAt: true,
         lastActivityAt: true,
         assignedToId: true,
+        score: true,
+        scoreBand: true,
+        tags: true,
         assignedTo: { select: { id: true, name: true } },
         _count: { select: { notes: true } },
       },
@@ -193,21 +215,21 @@ export async function leadPipelineCounts(actor: AdminActor | null) {
       where: {
         ...scope,
         nextFollowUpAt: { not: null, lt: startOfToday() },
-        status: { notIn: ["CONVERTED", "LOST"] },
+        status: { notIn: [...CLOSED_STATUSES] },
       },
     }),
     prisma.lead.count({
       where: {
         ...scope,
         nextFollowUpAt: { gte: startOfToday(), lte: endOfToday() },
-        status: { notIn: ["CONVERTED", "LOST"] },
+        status: { notIn: [...CLOSED_STATUSES] },
       },
     }),
     prisma.lead.count({
       where: {
         ...scope,
         nextFollowUpAt: { gt: endOfToday() },
-        status: { notIn: ["CONVERTED", "LOST"] },
+        status: { notIn: [...CLOSED_STATUSES] },
       },
     }),
     prisma.lead.count({ where: { ...scope, assignedToId: null } }),
@@ -262,7 +284,7 @@ export async function followUpQueue(actor: AdminActor | null, limit = 12) {
     where: {
       ...scope,
       nextFollowUpAt: { not: null, lte: new Date(tomorrow.getTime() + 7 * 24 * 60 * 60 * 1000) },
-      status: { notIn: ["CONVERTED", "LOST"] },
+      status: { notIn: [...CLOSED_STATUSES] },
     },
     select: {
       id: true,

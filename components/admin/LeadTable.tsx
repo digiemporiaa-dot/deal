@@ -19,7 +19,7 @@ import { Select } from "@/components/ui/Field";
 import { useToast } from "@/components/admin/Toast";
 import { LeadDrawer } from "@/components/admin/LeadDrawer";
 import { useRowDrawer } from "@/components/admin/RowDrawerTable";
-import { LEAD_STATUSES, leadStatusLabel, leadSourceLabel } from "@/lib/crm";
+import { LEAD_STATUSES, leadStatusLabel, leadSourceLabel, isClosedStatus } from "@/lib/crm";
 import { leadStatusTone, priorityTone, humanStatus } from "@/lib/admin-status";
 import { bulkUpdateLeadStatus, bulkAssignLeads } from "@/app/admin/(panel)/leads/actions";
 import { cn, formatDate } from "@/lib/utils";
@@ -221,7 +221,11 @@ export function LeadTable({
 
         <Tbody>
           {leads.map((lead) => {
-            const followUp = lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt) : null;
+            // A closed lead has nothing due, whatever date the column still
+            // carries from before it was won or lost — showing it in red
+            // sends people to chase work that is already over.
+            const closed = isClosedStatus(lead.status);
+            const followUp = !closed && lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt) : null;
             const overdue = followUp ? followUp.getTime() < startOfToday : false;
             const isSelected = selected.has(lead.id);
             const isOpen = openLeadId === lead.id;

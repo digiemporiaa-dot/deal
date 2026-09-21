@@ -4,8 +4,7 @@ import * as React from "react";
 import { Download, FileSpreadsheet, FileText, Database, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/admin/ui";
 import { Input, Label, Select } from "@/components/ui/Field";
-
-const LEAD_STATUSES = ["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST"];
+import { LEAD_STATUSES, leadStatusLabel } from "@/lib/crm";
 
 function firstOfMonth(): string {
   const d = new Date();
@@ -80,7 +79,7 @@ export function ExportPanel({ members }: { members: { id: string; name: string }
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>
               {LEAD_STATUSES.map((s) => (
-                <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                <option key={s} value={s}>{leadStatusLabel(s)}</option>
               ))}
             </Select>
           </div>

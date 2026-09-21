@@ -6,9 +6,12 @@ import {
   ATTRIBUTION_COOKIE,
   EMPTY_ATTRIBUTION,
   classifySource,
+  normalizePhone,
   parseAttribution,
+  scoreLead,
   type Attribution,
 } from "@/lib/crm";
+import { findDuplicateLeads } from "@/lib/services/lead-dedupe";
 import type { LeadInput } from "@/lib/validation";
 
 /**
@@ -64,14 +67,49 @@ export async function resolveAttribution(
 export async function createLead(input: LeadInput) {
   const attribution = await resolveAttribution(input.utm);
 
+  const source =
+    attribution.source === "DIRECT"
+      ? (input.source || "WEBSITE").toUpperCase()
+      : attribution.source;
+
+  const travelDate = toDate(input.travelDate);
+
+  // Scored at creation so it is sortable the moment it lands. A brand-new
+  // enquiry has no interactions yet, which is why an incomplete form scores
+  // cold rather than unknown.
+  const scored = scoreLead({
+    email: input.email || null,
+    phone: input.phone,
+    whatsapp: input.whatsapp || null,
+    destination: input.destination || null,
+    budget: input.budget || null,
+    travelDate,
+    travellers: input.travellers ?? null,
+    adults: input.adults ?? null,
+    children: input.children ?? null,
+    source,
+    status: "NEW",
+    activityCount: 0,
+  });
+
+  // Flagged, never blocked. A returning customer filling the form again is
+  // not an error, and refusing their enquiry would lose real business — the
+  // duplicate is recorded so the desk can merge or ignore it.
+  const duplicates = await findDuplicateLeads({
+    phone: input.phone,
+    email: input.email || null,
+    limit: 3,
+  });
+
   const lead = await prisma.lead.create({
     data: {
       name: input.name,
       email: input.email || null,
       phone: input.phone,
+      phoneKey: normalizePhone(input.phone),
       whatsapp: input.whatsapp || null,
       destination: input.destination || null,
-      travelDate: toDate(input.travelDate),
+      travelDate,
       returnDate: toDate(input.returnDate),
       travellers: input.travellers ?? null,
       adults: input.adults ?? null,
@@ -79,10 +117,12 @@ export async function createLead(input: LeadInput) {
       country: input.country || null,
       budget: input.budget || null,
       message: input.message || null,
+      score: scored.score,
+      scoreBand: scored.band,
 
       // Channel from attribution; the form name is kept in the campaign-less
       // case as a readable fallback.
-      source: attribution.source === "DIRECT" ? (input.source || "WEBSITE").toUpperCase() : attribution.source,
+      source,
       medium: attribution.medium,
       campaign: attribution.campaign,
       term: attribution.term,
@@ -102,9 +142,29 @@ export async function createLead(input: LeadInput) {
     leadId: lead.id,
     source: lead.source,
     campaign: lead.campaign,
+    score: scored.score,
+    band: scored.band,
+    duplicateOf: duplicates.leads.map((row) => row.id),
   });
 
-  return lead;
+  // Recorded on the new lead's own timeline so whoever picks it up sees the
+  // history before they call, rather than after.
+  if (duplicates.isDuplicate) {
+    const names = duplicates.leads
+      .map((row) => `${row.name} (${row.statusLabel})`)
+      .join(", ");
+    await prisma.leadNote
+      .create({
+        data: {
+          leadId: lead.id,
+          type: "DUPLICATE",
+          body: `Possible duplicate of ${duplicates.leads.length} earlier enquiry/enquiries: ${names}`,
+        },
+      })
+      .catch((error) => logger.error("lead.duplicate_note_failed", { leadId: lead.id, error }));
+  }
+
+  return { ...lead, score: scored.score, scoreBand: scored.band, duplicates };
 }
 
 function toDate(value: string | undefined | null): Date | null {

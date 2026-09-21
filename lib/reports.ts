@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { LEAD_STATUSES, WON_STATUS, isClosedStatus } from "@/lib/crm";
 
 export type Period = { from: Date; to: Date; label: string; key: string };
 
@@ -125,12 +126,15 @@ export async function buildReport(periodKey?: string): Promise<ReportData> {
   ]);
 
   /* ---- lead totals ---- */
-  const converted = leads.filter((l) => l.status === "CONVERTED").length;
+  const converted = leads.filter((l) => l.status === WON_STATUS).length;
   const lost = leads.filter((l) => l.status === "LOST").length;
-  const open = leads.length - converted - lost;
+  // Junk is closed too, so it is not open work — but it is not a loss either,
+  // and counting it as one would understate everyone's conversion rate.
+  const junk = leads.filter((l) => l.status === "JUNK").length;
+  const open = leads.length - converted - lost - junk;
   const unassigned = leads.filter((l) => !l.assignedToId).length;
   const overdue = leads.filter(
-    (l) => l.nextFollowUpAt && l.nextFollowUpAt <= endOfToday && l.status !== "CONVERTED" && l.status !== "LOST",
+    (l) => l.nextFollowUpAt && l.nextFollowUpAt <= endOfToday && !isClosedStatus(l.status),
   ).length;
 
   /* ---- revenue ---- */
@@ -150,10 +154,11 @@ export async function buildReport(periodKey?: string): Promise<ReportData> {
   /* ---- per staff ---- */
   const staff: StaffRow[] = users.map((u) => {
     const mine = leads.filter((l) => l.assignedToId === u.id);
-    const won = mine.filter((l) => l.status === "CONVERTED").length;
+    const won = mine.filter((l) => l.status === WON_STATUS).length;
     const drop = mine.filter((l) => l.status === "LOST").length;
     const myNotes = notes.filter((n) => n.authorId === u.id);
     const closed = won + drop;
+    const binned = mine.filter((l) => l.status === "JUNK").length;
     return {
       id: u.id,
       name: u.name,
@@ -161,12 +166,12 @@ export async function buildReport(periodKey?: string): Promise<ReportData> {
       assigned: mine.length,
       converted: won,
       lost: drop,
-      open: mine.length - closed,
+      open: mine.length - closed - binned,
       conversionRate: closed > 0 ? Math.round((won / closed) * 100) : 0,
       emailsSent: myNotes.filter((n) => n.type === "EMAIL").length,
       callsLogged: myNotes.filter((n) => n.type === "CALL").length,
       overdue: mine.filter(
-        (l) => l.nextFollowUpAt && l.nextFollowUpAt <= endOfToday && l.status !== "CONVERTED" && l.status !== "LOST",
+        (l) => l.nextFollowUpAt && l.nextFollowUpAt <= endOfToday && !isClosedStatus(l.status),
       ).length,
     };
   });
@@ -209,7 +214,7 @@ export async function buildReport(periodKey?: string): Promise<ReportData> {
     const key = l.source || "website";
     const row = sourceMap.get(key) ?? { total: 0, converted: 0 };
     row.total += 1;
-    if (l.status === "CONVERTED") row.converted += 1;
+    if (l.status === WON_STATUS) row.converted += 1;
     sourceMap.set(key, row);
   }
   const sources: SourceRow[] = [...sourceMap.entries()]
@@ -222,8 +227,9 @@ export async function buildReport(periodKey?: string): Promise<ReportData> {
     .sort((a, b) => b.total - a.total);
 
   /* ---- status breakdown ---- */
-  const statusOrder = ["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST"];
-  const statusCounts = statusOrder.map((status) => ({
+  // Every pipeline status, in working order — including the two added with
+  // the CRM upgrade, so a lead can never fall out of this breakdown.
+  const statusCounts = LEAD_STATUSES.map((status) => ({
     status,
     count: leads.filter((l) => l.status === status).length,
   }));

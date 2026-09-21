@@ -14,10 +14,25 @@ const LEAD_TONES: Record<string, BadgeTone> = {
   CONTACTED: "amber",
   QUALIFIED: "purple",
   PROPOSAL_SENT: "brand",
+  NEGOTIATION: "brand",
   FOLLOW_UP: "amber",
   CONVERTED: "green",
   LOST: "red",
+  // Junk is closed but not a loss — grey, so it reads as "ignore" rather
+  // than "we failed".
+  JUNK: "slate",
 };
+
+/** HOT / WARM / COLD → badge colour. */
+const SCORE_TONES: Record<string, BadgeTone> = {
+  HOT: "red",
+  WARM: "amber",
+  COLD: "slate",
+};
+
+export function scoreBandTone(band: string): BadgeTone {
+  return SCORE_TONES[band] ?? "slate";
+}
 
 export function leadStatusTone(status: string): BadgeTone {
   return LEAD_TONES[status] ?? "slate";

@@ -49,10 +49,13 @@ model User {
   sessions      Session[]
   leadNotes     LeadNote[]
   blogPosts     BlogPost[]
-  assignedLeads Lead[]          @relation("LeadAssignee")
-  documents     SalesDocument[] @relation("DocumentAuthor")
+  assignedLeads Lead[]             @relation("LeadAssignee")
+  followUps     LeadFollowUp[]     @relation("FollowUpAssignee")
+  followUpsMade LeadFollowUp[]     @relation("FollowUpCreator")
+  statusChanges LeadStatusChange[] @relation("StatusChangeAuthor")
+  documents     SalesDocument[]    @relation("DocumentAuthor")
   activityLogs  ActivityLog[]
-  uploads       Media[]         @relation("MediaUploader")
+  uploads       Media[]            @relation("MediaUploader")
 
   pagesCreated     Page[]            @relation("PageAuthor")
   pagesUpdated     Page[]            @relation("PageEditor")
@@ -127,6 +130,7 @@ model Destination {
   packages  TravelPackage[]
   faqs      Faq[]
   blogPosts BlogPost[]         @relation("BlogDestination")
+  leads     Lead[]             @relation("LeadDestination")
 
   @@index([isPublished, isFeatured])
   @@index([country])
@@ -196,6 +200,7 @@ model TravelPackage {
   reviews     Testimonial[]
   coupons     Coupon[]           @relation("CouponPackages")
   blogPosts   BlogPost[]         @relation("BlogPackage")
+  leads       Lead[]             @relation("LeadPackage")
 
   @@index([published, featured])
   @@index([destinationId])
@@ -309,12 +314,17 @@ model Customer {
   whatsapp  String?
   country   String?
   city      String?
+  // Digits-only tail of `phone`. Lets a lead be matched to an existing
+  // customer by number regardless of how either was typed.
+  phoneKey  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   bookings  Booking[]
+  leads     Lead[]    @relation("CustomerLeads")
 
   @@unique([email, phone])
   @@index([email])
+  @@index([phoneKey])
 }
 
 model Booking {
@@ -420,6 +430,29 @@ model Lead {
   landingPage String?
   referrer    String?
 
+  // ── Qualification ──
+  // Digits-only tail of `phone`, kept so duplicate detection can match
+  // "+91 98765 43210" against "9876543210" with an index rather than a scan.
+  phoneKey  String?
+  rooms     Int?
+  // Honeymoon | Family | Group | Corporate | Solo | Pilgrimage | Adventure
+  tripType  String?
+  // JSON-encoded string array, same convention as TravelPackage.tags.
+  tags      String  @default("[]")
+  // Deterministic 0-100 score and its band, recomputed on every change.
+  score     Int     @default(0)
+  scoreBand String  @default("COLD")
+
+  // ── Interest: what the enquiry is actually about ──
+  packageId     String?
+  destinationId String?
+
+  // ── Lifecycle ──
+  // Set when the lead is converted; the customer it became.
+  customerId  String?
+  convertedAt DateTime?
+  lostReason  String?
+
   nextFollowUpAt    DateTime?
   lastActivityAt    DateTime?
   assignedToId      String?
@@ -428,9 +461,14 @@ model Lead {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  notes      LeadNote[]
-  documents  SalesDocument[]
-  assignedTo User?           @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  notes          LeadNote[]
+  documents      SalesDocument[]
+  followUps      LeadFollowUp[]
+  statusHistory  LeadStatusChange[]
+  assignedTo     User?              @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  package        TravelPackage?     @relation("LeadPackage", fields: [packageId], references: [id], onDelete: SetNull)
+  destinationRef Destination?       @relation("LeadDestination", fields: [destinationId], references: [id], onDelete: SetNull)
+  customer       Customer?          @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([createdAt])
@@ -442,6 +480,14 @@ model Lead {
   @@index([assignedToId, status])
   @@index([phone])
   @@index([email])
+  @@index([phoneKey])
+  @@index([customerId])
+  @@index([packageId])
+  @@index([destinationId])
+  @@index([convertedAt])
+  @@index([scoreBand, status])
+  @@index([status, score])
+  @@index([lastActivityAt])
 }
 
 model LeadNote {
@@ -462,6 +508,72 @@ model LeadNote {
   @@index([leadId, createdAt])
   @@index([authorId])
   @@index([type])
+  @@index([createdAt])
+}
+
+/**
+ * A scheduled piece of follow-up work on a lead.
+ * `Lead.nextFollowUpAt` stays the authoritative "when is this lead next due"
+ * column — every existing filter, counter, dashboard widget and cron job reads
+ * it — but it is now *derived*: it always mirrors the earliest PENDING row
+ * here. See `syncNextFollowUp` in lib/services/follow-up.ts.
+ */
+model LeadFollowUp {
+  id     String   @id @default(cuid())
+  leadId String
+  dueAt  DateTime
+  // CALL | WHATSAPP | EMAIL | MEETING | TASK
+  type   String   @default("CALL")
+  title  String
+  note   String?
+  // PENDING | DONE | CANCELLED
+  status String   @default("PENDING")
+
+  assignedToId String?
+  createdById  String?
+
+  completedAt DateTime?
+  /**
+   * What came of it — free text written when the task is closed.
+   */
+  outcome     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("FollowUpAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy  User? @relation("FollowUpCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([leadId, status])
+  @@index([status, dueAt])
+  @@index([assignedToId, status, dueAt])
+  @@index([dueAt])
+}
+
+/**
+ * Append-only record of every pipeline move, so stage duration and win/loss
+ * velocity can be measured instead of guessed. Complements `LeadNote` (which
+ * is the human-readable timeline) and `ActivityLog` (which is the audit trail).
+ */
+model LeadStatusChange {
+  id          String   @id @default(cuid())
+  leadId      String
+  fromStatus  String?
+  toStatus    String
+  changedById String?
+  /**
+   * Loss reason, or any note the person gave for the move.
+   */
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  lead      Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  changedBy User? @relation("StatusChangeAuthor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@index([toStatus, createdAt])
   @@index([createdAt])
 }
 

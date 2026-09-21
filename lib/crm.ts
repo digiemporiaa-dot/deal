@@ -10,31 +10,62 @@ import type { LeadStatus } from "@/types/db-enums";
 /**
  * The lead pipeline, in the order it is worked.
  *
- * `CONVERTED` is the won state. It keeps its original name because existing
- * rows use it — the UI labels it "Won".
+ * Two values are historical and deliberately kept: `PROPOSAL_SENT` is the
+ * proposal stage and `CONVERTED` is the won state. Renaming either would mean
+ * rewriting live rows, so instead they keep their stored value and the UI
+ * labels them "Proposal" and "Won". `NEGOTIATION` and `JUNK` are new — no
+ * existing row uses them, so adding them costs no migration at all.
  */
 export const LEAD_STATUSES = [
   "NEW",
   "CONTACTED",
   "QUALIFIED",
   "PROPOSAL_SENT",
+  "NEGOTIATION",
   "FOLLOW_UP",
   "CONVERTED",
   "LOST",
+  "JUNK",
 ] as const satisfies readonly LeadStatus[];
+
+/** The stored value of the won state. Never hard-code "CONVERTED". */
+export const WON_STATUS = "CONVERTED" as const;
+/** The stored value of the proposal stage. */
+export const PROPOSAL_STATUS = "PROPOSAL_SENT" as const;
 
 export const LEAD_STATUS_LABELS: Record<string, string> = {
   NEW: "New",
   CONTACTED: "Contacted",
   QUALIFIED: "Qualified",
-  PROPOSAL_SENT: "Proposal sent",
+  PROPOSAL_SENT: "Proposal",
+  NEGOTIATION: "Negotiation",
   FOLLOW_UP: "Follow-up",
   CONVERTED: "Won",
   LOST: "Lost",
+  JUNK: "Junk",
 };
 
-/** Statuses that close a lead — excluded from "open pipeline" counts. */
-export const CLOSED_STATUSES = ["CONVERTED", "LOST"] as const;
+/**
+ * Statuses that close a lead — excluded from "open pipeline" counts, from the
+ * follow-up queues and from the nurture sequence. A junk lead is closed for
+ * the same reason a lost one is: nobody should be chasing it.
+ */
+export const CLOSED_STATUSES = ["CONVERTED", "LOST", "JUNK"] as const;
+
+/** Statuses still being worked. */
+export const OPEN_STATUSES = LEAD_STATUSES.filter(
+  (status) => !(CLOSED_STATUSES as readonly string[]).includes(status),
+);
+
+export function isClosedStatus(status: string): boolean {
+  return (CLOSED_STATUSES as readonly string[]).includes(status);
+}
+
+/** Where a status sits in the pipeline; unknown values sort last. */
+export function leadStatusOrder(status: string): number {
+  const index = (LEAD_STATUSES as readonly string[]).indexOf(status);
+  return index === -1 ? LEAD_STATUSES.length : index;
+}
 
 export const LEAD_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 export type LeadPriority = (typeof LEAD_PRIORITIES)[number];
@@ -225,4 +256,357 @@ export function parseAttribution(raw: string | null | undefined): Attribution | 
 export function conversionRate(leads: number, bookings: number): number {
   if (leads <= 0) return 0;
   return Math.round((bookings / leads) * 1000) / 10;
+}
+
+/* ───────────────────── phone normalisation ───────────────────── */
+
+/**
+ * Reduce a phone number to a comparable key: the last ten digits.
+ *
+ * "+91 98765 43210", "098765-43210" and "9876543210" all key to
+ * "9876543210", which is what makes duplicate detection work at all — people
+ * type the same number five different ways. Ten digits is the Indian
+ * subscriber length; for a shorter number whatever digits exist are used.
+ *
+ * Stored in `Lead.phoneKey` / `Customer.phoneKey` so the match is an indexed
+ * equality rather than a table scan.
+ */
+export function normalizePhone(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  if (!digits) return null;
+  return digits.slice(-10);
+}
+
+/** True when two numbers are the same person, however they were typed. */
+export function samePhone(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = normalizePhone(a);
+  const right = normalizePhone(b);
+  return Boolean(left && right && left === right);
+}
+
+/** Lower-cased, trimmed email, or null. Used for case-insensitive matching. */
+export function normalizeEmail(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = String(value).trim().toLowerCase();
+  return trimmed || null;
+}
+
+/* ───────────────────────── budget ───────────────────────── */
+
+/**
+ * Read a rupee figure out of free text.
+ *
+ * `Lead.budget` is a free-text field — the website form offers ranges, agents
+ * type whatever the customer said. Everything below is real input this has to
+ * cope with:
+ *
+ *   "50000"            → 50000
+ *   "₹50,000"          → 50000
+ *   "50k"              → 50000
+ *   "1.5 lakh"         → 150000
+ *   "2L"               → 200000
+ *   "₹50,000 - ₹75,000" → 50000   (the lower bound)
+ *   "Not sure"         → null
+ *
+ * The *lower* bound of a range is returned deliberately: scoring a lead on the
+ * optimistic end of what it might spend is how a pipeline ends up flattering
+ * itself.
+ */
+export function parseBudget(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const text = String(value).toLowerCase().replace(/,/g, "");
+
+  // Each number with whatever unit suffix follows it.
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*(crore|cr|lakh|lac|lakhs|l|k)?/g)];
+
+  const parsed = matches
+    .map((match) => ({ digits: Number(match[1]), unit: match[2] }))
+    .filter((entry) => Number.isFinite(entry.digits) && entry.digits > 0);
+
+  if (parsed.length === 0) return null;
+
+  // In a range the unit is usually written once, at the end: "1-2 lakh" means
+  // one to two lakh, not one rupee. A bare number borrows the unit of the next
+  // number that has one — but only when it is small enough to be a multiplier.
+  // "50000 or 2 lakh" keeps its fifty thousand, because a five-digit figure is
+  // already a rupee amount and nobody means fifty thousand lakh.
+  const INHERIT_BELOW = 1_000;
+  for (let i = parsed.length - 1; i >= 0; i -= 1) {
+    if (parsed[i].unit) continue;
+    if (parsed[i].digits >= INHERIT_BELOW) continue;
+    const next = parsed.slice(i + 1).find((entry) => entry.unit);
+    if (next) parsed[i].unit = next.unit;
+  }
+
+  const amounts = parsed.map(({ digits, unit }) => {
+    switch (unit) {
+      case "crore":
+      case "cr":
+        return digits * 10_000_000;
+      case "lakh":
+      case "lac":
+      case "lakhs":
+      case "l":
+        return digits * 100_000;
+      case "k":
+        return digits * 1_000;
+      default:
+        return digits;
+    }
+  });
+
+  return Math.min(...amounts);
+}
+
+/* ───────────────────────── tags ───────────────────────── */
+
+/**
+ * Tags are stored JSON-encoded in a text column, the same convention
+ * `TravelPackage.tags` already uses. Parsing never throws: a corrupt value
+ * reads as no tags rather than breaking the page that displays it.
+ */
+export function parseTags(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+/** Normalise, de-duplicate (case-insensitively) and encode a tag list. */
+export function serializeTags(tags: readonly string[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tag of tags) {
+    const clean = String(tag).trim().slice(0, 40);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+}
+
+/* ───────────────────────── lead scoring ───────────────────────── */
+
+export const SCORE_BANDS = ["HOT", "WARM", "COLD"] as const;
+
+/** A lead scores HOT at or above this, WARM at or above the next one down. */
+export const HOT_THRESHOLD = 65;
+export const WARM_THRESHOLD = 35;
+
+export type ScoreInput = {
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  destination?: string | null;
+  packageId?: string | null;
+  budget?: string | null;
+  travelDate?: Date | string | null;
+  travellers?: number | null;
+  adults?: number | null;
+  children?: number | null;
+  source?: string | null;
+  status?: string | null;
+  /** How many timeline entries the lead has — calls, notes, emails. */
+  activityCount?: number | null;
+  lastActivityAt?: Date | string | null;
+  /** Injected in tests so scoring is deterministic. */
+  now?: Date;
+};
+
+export type ScoreReason = { label: string; points: number };
+
+export type LeadScore = {
+  score: number;
+  band: (typeof SCORE_BANDS)[number];
+  reasons: ScoreReason[];
+};
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Score a lead out of 100.
+ *
+ * Pure and deterministic: the same lead always scores the same, which is what
+ * makes the number trustworthy enough to sort a pipeline by and cheap enough
+ * to recompute on every write. Nothing here is a model or a guess — each
+ * signal is something a travel desk would actually weigh:
+ *
+ *   contactability  25  can we even reach them, and on what
+ *   intent          25  is this a real trip with a date, or a browse
+ *   value           20  what is it worth
+ *   fit             15  do we know what they want
+ *   engagement      15  have they responded to us
+ *
+ * `reasons` is returned alongside the number so the UI can explain the score
+ * rather than presenting it as an oracle.
+ */
+export function scoreLead(input: ScoreInput): LeadScore {
+  const now = input.now ?? new Date();
+  const reasons: ScoreReason[] = [];
+
+  const add = (label: string, points: number) => {
+    if (points > 0) reasons.push({ label, points });
+  };
+
+  // ── Contactability (25) ──
+  if (input.email) add("Email address on file", 10);
+  if (input.whatsapp) add("WhatsApp number on file", 8);
+  if (input.phone) add("Phone number on file", 7);
+
+  // ── Intent: how close the trip is (25) ──
+  const travelDate = toDate(input.travelDate);
+  if (travelDate) {
+    const days = Math.round((travelDate.getTime() - now.getTime()) / DAY);
+    if (days < 0) {
+      // The date has passed and nobody updated it — that is stale, not urgent.
+      add("Travel date already passed", 0);
+    } else if (days <= 30) {
+      add("Travelling within 30 days", 25);
+    } else if (days <= 90) {
+      add("Travelling within 3 months", 16);
+    } else if (days <= 180) {
+      add("Travelling within 6 months", 8);
+    } else {
+      add("Travel date set", 4);
+    }
+  }
+
+  // ── Value (20) ──
+  const budget = parseBudget(input.budget);
+  if (budget !== null) {
+    if (budget >= 200_000) add("Budget ₹2L+", 20);
+    else if (budget >= 100_000) add("Budget ₹1L+", 16);
+    else if (budget >= 50_000) add("Budget ₹50k+", 12);
+    else if (budget >= 25_000) add("Budget ₹25k+", 8);
+    else add("Budget given", 4);
+  }
+
+  // ── Fit: do we know what they want (15) ──
+  if (input.packageId) add("Asked about a specific package", 8);
+  else if (input.destination) add("Destination named", 5);
+
+  const party =
+    (input.travellers ?? 0) || (input.adults ?? 0) + (input.children ?? 0);
+  if (party >= 6) add("Group of 6 or more", 7);
+  else if (party >= 2) add("Two or more travellers", 4);
+
+  // ── Engagement (15) ──
+  const activity = Math.max(0, input.activityCount ?? 0);
+  if (activity > 0) {
+    add(`${activity} interaction${activity === 1 ? "" : "s"} logged`, Math.min(activity * 3, 9));
+  }
+
+  const lastActivity = toDate(input.lastActivityAt);
+  if (lastActivity) {
+    const idleDays = Math.round((now.getTime() - lastActivity.getTime()) / DAY);
+    if (idleDays <= 3) add("Active in the last 3 days", 6);
+    else if (idleDays <= 7) add("Active in the last week", 3);
+  }
+
+  // ── Channel quality: a modifier, not a category of its own ──
+  switch ((input.source || "").toUpperCase()) {
+    case "REFERRAL":
+      add("Came by referral", 6);
+      break;
+    case "WHATSAPP":
+      add("Came in on WhatsApp", 4);
+      break;
+    case "GOOGLE_ADS":
+      add("Clicked a search ad", 4);
+      break;
+    case "ORGANIC":
+      add("Found us in search", 3);
+      break;
+    case "META_ADS":
+      add("Clicked a social ad", 2);
+      break;
+    default:
+      break;
+  }
+
+  const raw = reasons.reduce((sum, reason) => sum + reason.points, 0);
+  const score = Math.max(0, Math.min(100, raw));
+
+  // A closed lead is not a prospect, whatever its attributes say.
+  if (input.status && isClosedStatus(input.status) && input.status !== WON_STATUS) {
+    return { score: 0, band: "COLD", reasons: [{ label: "Lead is closed", points: 0 }] };
+  }
+
+  return {
+    score,
+    band: score >= HOT_THRESHOLD ? "HOT" : score >= WARM_THRESHOLD ? "WARM" : "COLD",
+    reasons: reasons.sort((a, b) => b.points - a.points),
+  };
+}
+
+/** The band a stored score falls in — used where only the number is to hand. */
+export function scoreBandFor(score: number): (typeof SCORE_BANDS)[number] {
+  if (score >= HOT_THRESHOLD) return "HOT";
+  if (score >= WARM_THRESHOLD) return "WARM";
+  return "COLD";
+}
+
+/**
+ * The scoring inputs, read off a lead row.
+ *
+ * Kept here, beside `scoreLead`, so that every caller feeds it the same
+ * fields. The request path (lib/services/lead-scoring.ts) and the maintenance
+ * script (prisma/backfill-crm.ts) cannot import each other — one is
+ * `server-only`, the other a CLI with its own Prisma client — and without a
+ * shared mapping they would quietly drift into scoring leads differently.
+ */
+export function scoreInputFromLead(
+  lead: {
+    email?: string | null;
+    phone?: string | null;
+    whatsapp?: string | null;
+    destination?: string | null;
+    packageId?: string | null;
+    budget?: string | null;
+    travelDate?: Date | string | null;
+    travellers?: number | null;
+    adults?: number | null;
+    children?: number | null;
+    source?: string | null;
+    status?: string | null;
+    lastActivityAt?: Date | string | null;
+  },
+  activityCount: number,
+  now?: Date,
+): ScoreInput {
+  return {
+    email: lead.email ?? null,
+    phone: lead.phone ?? null,
+    whatsapp: lead.whatsapp ?? null,
+    destination: lead.destination ?? null,
+    packageId: lead.packageId ?? null,
+    budget: lead.budget ?? null,
+    travelDate: lead.travelDate ?? null,
+    travellers: lead.travellers ?? null,
+    adults: lead.adults ?? null,
+    children: lead.children ?? null,
+    source: lead.source ?? null,
+    status: lead.status ?? null,
+    activityCount,
+    lastActivityAt: lead.lastActivityAt ?? null,
+    now,
+  };
 }
