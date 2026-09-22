@@ -108,10 +108,28 @@ describe("isNavItemActive", () => {
   });
 
   it("stands the parent down on a filtered view that has its own entry", () => {
-    // /admin/leads?due=today IS Follow-ups, so Leads must not also light up.
-    expect(isNavItemActive(followUps, "/admin/leads", "due=today")).toBe(true);
-    expect(isNavItemActive(leads, "/admin/leads", "due=today")).toBe(false);
+    // Checked against a filtered entry that is really in the navigation —
+    // the rule reads the live nav, so a made-up href would not exercise it.
+    const bookings = {
+      href: "/admin/bookings",
+      label: "All bookings",
+      icon: null as never,
+      section: "bookings",
+    };
+    const upcoming = {
+      href: "/admin/bookings?upcoming=1",
+      label: "Upcoming trips",
+      icon: null as never,
+      section: "bookings",
+      exact: true,
+    };
+
+    // /admin/bookings?upcoming=1 IS Upcoming trips, so All bookings stands down.
+    expect(isNavItemActive(upcoming, "/admin/bookings", "upcoming=1")).toBe(true);
+    expect(isNavItemActive(bookings, "/admin/bookings", "upcoming=1")).toBe(false);
+
     // A query with no entry of its own leaves the parent current.
+    expect(isNavItemActive(bookings, "/admin/bookings", "status=CONFIRMED")).toBe(true);
     expect(isNavItemActive(leads, "/admin/leads", "status=NEW")).toBe(true);
   });
 

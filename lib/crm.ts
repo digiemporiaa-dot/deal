@@ -610,3 +610,75 @@ export function scoreInputFromLead(
     now,
   };
 }
+
+/* ───────────────────── follow-up urgency ───────────────────── */
+
+export const QUEUE_BUCKETS = ["overdue", "today", "tomorrow", "week", "later"] as const;
+export type QueueBucket = (typeof QUEUE_BUCKETS)[number];
+
+export const BUCKET_LABELS: Record<QueueBucket, string> = {
+  overdue: "Overdue",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  week: "This week",
+  later: "Later",
+};
+
+/**
+ * How overdue a follow-up has to be before it is escalated.
+ *
+ * Three days: one day late is somebody having a busy morning, three days late
+ * is a lead quietly going cold. The queue page, the row badge and the manager
+ * digest all read this, so they cannot disagree about what "late" means.
+ */
+export const ESCALATION_DAYS = 3;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Day boundaries for bucketing, from one reference instant.
+ *
+ * Computed once per request and passed in, so every task in a queue is
+ * bucketed against the same clock — otherwise a list rendering across
+ * midnight could put two identical due dates in different buckets.
+ */
+export function dayEdges(now: Date = new Date()) {
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const endOfTomorrow = new Date(endOfToday);
+  endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+
+  const endOfWeek = new Date(endOfToday);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  return { startOfToday, endOfToday, endOfTomorrow, endOfWeek };
+}
+
+/** Which urgency bucket a due date falls in. */
+export function bucketFor(dueAt: Date, edges: ReturnType<typeof dayEdges>): QueueBucket {
+  if (dueAt < edges.startOfToday) return "overdue";
+  if (dueAt <= edges.endOfToday) return "today";
+  if (dueAt <= edges.endOfTomorrow) return "tomorrow";
+  if (dueAt <= edges.endOfWeek) return "week";
+  return "later";
+}
+
+/**
+ * Whole days a task is late; 0 when it is not overdue yet.
+ *
+ * Counted in calendar days from the start of today, not in elapsed hours, so
+ * something due at 5pm yesterday reads as "1 day late" this morning rather
+ * than "0" — which is how a person would describe it.
+ */
+export function daysLate(dueAt: Date, edges: ReturnType<typeof dayEdges>): number {
+  if (dueAt >= edges.startOfToday) return 0;
+  return Math.max(1, Math.floor((edges.startOfToday.getTime() - dueAt.getTime()) / DAY_MS) + 1);
+}
+
+export function isEscalated(dueAt: Date, edges: ReturnType<typeof dayEdges>): boolean {
+  return daysLate(dueAt, edges) >= ESCALATION_DAYS;
+}

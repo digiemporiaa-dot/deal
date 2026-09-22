@@ -57,19 +57,39 @@ export function leadAssignedEmail(d: {
 }
 
 /** Daily digest reminding a team member which of their leads are due. */
+export type DigestTask = {
+  /** What the follow-up is for — "Call back with March pricing". */
+  title: string;
+  /** Call, WhatsApp, Email, Meeting or Task. */
+  kind: string;
+  leadName: string;
+  destination: string | null;
+  due: string;
+  url: string;
+};
+
+/**
+ * One team member's outstanding follow-ups.
+ *
+ * Lists the tasks, not the leads. The old version could only say "Asha Menon
+ * is due today", which tells someone to open the CRM to find out what they
+ * were supposed to do; this says "Call back with March pricing — Asha Menon",
+ * which they can act on from the email.
+ */
 export function followUpDigestEmail(d: {
   siteName: string;
   staffName: string;
-  overdue: { name: string; destination: string | null; due: string; url: string }[];
-  today: { name: string; destination: string | null; due: string; url: string }[];
+  overdue: DigestTask[];
+  today: DigestTask[];
 }): string {
-  const list = (items: typeof d.overdue, colour: string) =>
+  const list = (items: DigestTask[], colour: string) =>
     items
       .map(
         (i) =>
           `<tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9">
-             <a href="${esc(i.url)}" style="color:#1b70f1;font-weight:600;text-decoration:none;font-size:14px">${esc(i.name)}</a>
-             <span style="color:#6b7280;font-size:12px"> · ${esc(i.destination || "No destination")}</span><br>
+             <a href="${esc(i.url)}" style="color:#1b70f1;font-weight:600;text-decoration:none;font-size:14px">${esc(i.title)}</a>
+             <span style="color:#6b7280;font-size:12px"> · ${esc(i.kind)}</span><br>
+             <span style="color:#334155;font-size:12px">${esc(i.leadName)}${i.destination ? ` · ${esc(i.destination)}` : ""}</span><br>
              <span style="color:${colour};font-size:12px">Due ${esc(i.due)}</span>
            </td></tr>`,
       )
@@ -87,6 +107,47 @@ export function followUpDigestEmail(d: {
   return shell(
     "Your follow-ups for today",
     `<p style="margin:0;font-size:14px;line-height:1.6">Hi ${esc(d.staffName)}, here is your follow-up list.</p>${sections}`,
+    d.siteName,
+  );
+}
+
+/**
+ * Follow-ups nobody has touched for days, sent to whoever can do something
+ * about it.
+ *
+ * The owner already gets a daily digest listing these; if they are still open
+ * after three days, another copy to the same person is not the answer. This
+ * goes to managers, names the owner, and exists so a lead going cold becomes
+ * somebody's decision rather than nobody's.
+ */
+export function escalationDigestEmail(d: {
+  siteName: string;
+  managerName: string;
+  days: number;
+  tasks: {
+    title: string;
+    leadName: string;
+    owner: string | null;
+    daysLate: number;
+    url: string;
+  }[];
+}): string {
+  const rows = d.tasks
+    .map(
+      (task) =>
+        `<tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9">
+           <a href="${esc(task.url)}" style="color:#1b70f1;font-weight:600;text-decoration:none;font-size:14px">${esc(task.title)}</a><br>
+           <span style="color:#334155;font-size:12px">${esc(task.leadName)} · ${esc(task.owner || "Unassigned")}</span><br>
+           <span style="color:#b91c1c;font-size:12px">${task.daysLate} day${task.daysLate === 1 ? "" : "s"} late</span>
+         </td></tr>`,
+    )
+    .join("");
+
+  return shell(
+    "Follow-ups going cold",
+    `<p style="margin:0;font-size:14px;line-height:1.6">Hi ${esc(d.managerName)}, ${d.tasks.length} follow-up${d.tasks.length === 1 ? " has" : "s have"} been outstanding for more than ${d.days} days.</p>
+     <table style="width:100%;border-collapse:collapse;margin-top:12px">${rows}</table>
+     <p style="margin:16px 0 0;font-size:12px;color:#6b7280">Reassign them, or close the leads if they are no longer real.</p>`,
     d.siteName,
   );
 }

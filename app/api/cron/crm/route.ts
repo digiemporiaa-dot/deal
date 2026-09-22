@@ -7,7 +7,28 @@ import { sendMail } from "@/lib/email/mailer";
 import { getSettings } from "@/lib/settings";
 import { CLOSED_STATUSES } from "@/lib/crm";
 import { rescoreAllLeads } from "@/lib/services/lead-scoring";
-import { followUpDigestEmail, sequenceEmail, SEQUENCE_STEPS } from "@/lib/email/crm-emails";
+import {
+  followUpDigestEmail,
+  escalationDigestEmail,
+  sequenceEmail,
+  SEQUENCE_STEPS,
+  type DigestTask,
+} from "@/lib/email/crm-emails";
+import { alreadyRanToday, recordCronRun } from "@/lib/activity";
+import {
+  dueFollowUpsByOwner,
+  escalatedFollowUps,
+  followUpTypeLabel,
+  ESCALATION_DAYS,
+} from "@/lib/services/follow-up";
+
+/**
+ * Who hears about a follow-up going cold.
+ *
+ * Deliberately not everyone with `leads:view` — an escalation that lands in
+ * twenty inboxes is an escalation nobody owns.
+ */
+const ESCALATION_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER"];
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,8 +57,14 @@ function fmt(d: Date): string {
  *     emails (after 1 hour, 2 days, 5 days). Any human action stops it.
  *  2. Follow-up digest — each team member gets one email listing their
  *     overdue and due-today leads.
- *  3. Score refresh — lead scores are stored, so they drift as travel dates
+ *  3. Escalation — follow-ups nobody has touched for days go to the managers,
+ *     because another copy to the owner who is already ignoring them is not
+ *     an escalation.
+ *  4. Score refresh — lead scores are stored, so they drift as travel dates
  *     approach. This brings them back in line.
+ *
+ * Every email is guarded per recipient per day, because cron is at-least-once
+ * and a digest that arrives twice is a digest people stop opening.
  */
 export async function GET(request: Request) {
   // Vercel Cron signs its calls with CRON_SECRET in the Authorization header.
@@ -118,53 +145,107 @@ export async function GET(request: Request) {
   }
 
   /* ---------- 2. Follow-up digest per team member ---------- */
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  //
+  // Reads the follow-up tasks, not `Lead.nextFollowUpAt`. That column holds
+  // one date per lead, so a lead with three things outstanding produced one
+  // digest line and no clue what any of them were for.
+  //
+  // Each recipient is guarded separately: cron is at-least-once, and a person
+  // who gets their list twice in ten minutes stops reading it. The guard is
+  // per person rather than per run so that a job which dies half-way resumes
+  // rather than either repeating everyone or skipping the rest.
+  const owners = await dueFollowUpsByOwner(now);
+  const dayKey = now.toISOString().slice(0, 10);
+  let digestsSkipped = 0;
 
-  const dueLeads = await prisma.lead.findMany({
-    where: {
-      nextFollowUpAt: { not: null, lte: endOfToday },
-      status: { notIn: [...CLOSED_STATUSES] },
-      assignedToId: { not: null },
-    },
-    select: {
-      id: true,
-      name: true,
-      destination: true,
-      nextFollowUpAt: true,
-      assignedTo: { select: { id: true, name: true, email: true, isActive: true } },
-    },
-  });
+  for (const owner of owners) {
+    if (!owner.overdue.length && !owner.today.length) continue;
 
-  const byStaff = new Map<string, typeof dueLeads>();
-  for (const lead of dueLeads) {
-    if (!lead.assignedTo?.isActive || !lead.assignedTo.email) continue;
-    const list = byStaff.get(lead.assignedTo.id) ?? [];
-    list.push(lead);
-    byStaff.set(lead.assignedTo.id, list);
-  }
+    const key = `followup-digest:${owner.id}:${dayKey}`;
+    if (await alreadyRanToday(key)) {
+      digestsSkipped += 1;
+      continue;
+    }
 
-  for (const [, leads] of byStaff) {
-    const staff = leads[0].assignedTo;
-    if (!staff?.email) continue;
+    const toTask = (row: (typeof owner.overdue)[number], due: string): DigestTask => ({
+      title: row.title,
+      kind: followUpTypeLabel(row.type),
+      leadName: row.lead.name,
+      destination: row.lead.destination,
+      due,
+      url: `${baseUrl()}/admin/leads/${row.leadId}`,
+    });
 
-    const overdue = leads
-      .filter((l) => l.nextFollowUpAt && l.nextFollowUpAt < startOfToday)
-      .map((l) => ({ name: l.name, destination: l.destination, due: fmt(l.nextFollowUpAt as Date), url: `${baseUrl()}/admin/leads/${l.id}` }));
-    const today = leads
-      .filter((l) => l.nextFollowUpAt && l.nextFollowUpAt >= startOfToday)
-      .map((l) => ({ name: l.name, destination: l.destination, due: "today", url: `${baseUrl()}/admin/leads/${l.id}` }));
-
-    if (!overdue.length && !today.length) continue;
+    const overdue = owner.overdue.map((row) => toTask(row, fmt(row.dueAt)));
+    const today = owner.today.map((row) => toTask(row, "today"));
+    const count = overdue.length + today.length;
 
     const sent = await sendMail({
-      to: staff.email,
-      subject: `${overdue.length + today.length} follow-up${overdue.length + today.length === 1 ? "" : "s"} waiting for you`,
-      html: followUpDigestEmail({ siteName: settings.siteName, staffName: staff.name, overdue, today }),
+      to: owner.email,
+      subject: `${count} follow-up${count === 1 ? "" : "s"} waiting for you`,
+      html: followUpDigestEmail({
+        siteName: settings.siteName,
+        staffName: owner.name,
+        overdue,
+        today,
+      }),
     });
-    if (sent) digestsSent += 1;
+
+    if (sent) {
+      digestsSent += 1;
+      // Recorded only on a successful send, so a failed delivery is retried
+      // by the next run rather than marked done and lost.
+      await recordCronRun(key, `Sent ${count} follow-up(s) to ${owner.name}`, {
+        overdue: overdue.length,
+        today: today.length,
+      });
+    }
+  }
+
+  /* ---------- 2b. Escalation to managers ---------- */
+  //
+  // A task the owner has ignored for days does not need a fourth copy of the
+  // same digest — it needs somebody who can reassign it. Managers get one
+  // list of everything going cold across the team.
+  let escalationsSent = 0;
+  const stale = await escalatedFollowUps(now);
+
+  if (stale.length > 0) {
+    const managers = await prisma.user.findMany({
+      where: { isActive: true, role: { in: ESCALATION_ROLES } },
+      select: { id: true, name: true, email: true },
+    });
+
+    for (const manager of managers) {
+      if (!manager.email) continue;
+
+      const key = `followup-escalation:${manager.id}:${dayKey}`;
+      if (await alreadyRanToday(key)) continue;
+
+      const sent = await sendMail({
+        to: manager.email,
+        subject: `${stale.length} follow-up${stale.length === 1 ? "" : "s"} going cold`,
+        html: escalationDigestEmail({
+          siteName: settings.siteName,
+          managerName: manager.name,
+          days: ESCALATION_DAYS,
+          tasks: stale.slice(0, 50).map((task) => ({
+            title: task.title,
+            leadName: task.lead.name,
+            owner: task.assignedTo?.name ?? null,
+            daysLate: task.daysLate,
+            url: `${baseUrl()}/admin/leads/${task.leadId}`,
+          })),
+        }),
+      });
+
+      if (sent) {
+        escalationsSent += 1;
+        await recordCronRun(key, `Escalated ${stale.length} stale follow-up(s) to ${manager.name}`, {
+          stale: stale.length,
+        });
+      }
+    }
   }
 
   // 3. Refresh lead scores.
@@ -184,6 +265,9 @@ export async function GET(request: Request) {
   logger.info("cron.crm_completed", {
     sequenceSent,
     digestsSent,
+    digestsSkipped,
+    escalationsSent,
+    stale: stale.length,
     checked: candidates.length,
     rescored: rescored.changed,
   });
@@ -191,6 +275,9 @@ export async function GET(request: Request) {
     ok: true,
     sequenceSent,
     digestsSent,
+    digestsSkipped,
+    escalationsSent,
+    stale: stale.length,
     checked: candidates.length,
     rescored: rescored.changed,
   });

@@ -1,7 +1,19 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { CLOSED_STATUSES } from "@/lib/crm";
+import {
+  CLOSED_STATUSES,
+  QUEUE_BUCKETS,
+  BUCKET_LABELS,
+  ESCALATION_DAYS,
+  dayEdges,
+  bucketFor,
+  daysLate as daysLateFor,
+  isEscalated,
+  type QueueBucket,
+} from "@/lib/crm";
+import { isLeadOwnerOnly } from "@/lib/permissions";
+import type { AdminActor } from "@/lib/guard";
 import type { FollowUpStatus, FollowUpType } from "@/types/db-enums";
 import type { Prisma } from "@prisma/client";
 
@@ -23,6 +35,11 @@ import type { Prisma } from "@prisma/client";
  * carries the detail. `syncNextFollowUp` is the only writer of that column;
  * anything that changes a task calls it afterwards.
  */
+
+// Re-exported so a caller needs one import for the whole follow-up
+// vocabulary, even though the urgency rules live in the edge-safe domain
+// module where they can be unit-tested.
+export { QUEUE_BUCKETS, BUCKET_LABELS, ESCALATION_DAYS, type QueueBucket };
 
 export const FOLLOW_UP_TYPES = ["CALL", "WHATSAPP", "EMAIL", "MEETING", "TASK"] as const;
 export const FOLLOW_UP_STATUSES = ["PENDING", "DONE", "CANCELLED"] as const;
@@ -318,4 +335,257 @@ export async function closeFollowUpsForLead(
   }
   await syncNextFollowUp(leadId, tx);
   return result.count;
+}
+
+/* ───────────────────────── the queue ───────────────────────── */
+
+/**
+ * How overdue a follow-up has to be before it counts as escalated.
+ *
+ * Three working days: a task one day late is someone having a busy morning,
+ * a task three days late is a lead quietly going cold. The number is here
+ * rather than inlined because the queue page, the badge and the manager
+ * digest all have to agree on it.
+ */
+export type QueueItem = FollowUpRecord & {
+  bucket: QueueBucket;
+  /** Whole days late; 0 when not overdue. */
+  daysLate: number;
+  escalated: boolean;
+  leadName: string;
+  leadPhone: string;
+  leadEmail: string | null;
+  leadStatus: string;
+  leadScore: number;
+  leadScoreBand: string;
+  leadDestination: string | null;
+};
+
+const QUEUE_SELECT = {
+  id: true,
+  leadId: true,
+  dueAt: true,
+  type: true,
+  title: true,
+  note: true,
+  status: true,
+  completedAt: true,
+  outcome: true,
+  assignedToId: true,
+  assignedTo: { select: { name: true } },
+  createdBy: { select: { name: true } },
+  createdAt: true,
+  lead: {
+    select: {
+      name: true,
+      phone: true,
+      email: true,
+      status: true,
+      score: true,
+      scoreBand: true,
+      destination: true,
+    },
+  },
+} satisfies Prisma.LeadFollowUpSelect;
+
+export type QueueFilters = {
+  /** A specific owner, "me", "none", or undefined for everyone in scope. */
+  owner?: string;
+  type?: string;
+  bucket?: QueueBucket;
+  /** Lead name, phone or email. */
+  q?: string;
+  limit?: number;
+};
+
+/**
+ * Every pending follow-up the signed-in user should see, bucketed by urgency.
+ *
+ * This is the page that answers "what do I do next", which `Lead.nextFollowUpAt`
+ * could never do properly: that column holds one date per lead, so a lead with
+ * three things outstanding looked like a lead with one.
+ *
+ * Scoping is the same rule as everywhere else and is applied last: a role that
+ * works only its own pipeline sees only tasks on its own leads, whatever the
+ * query string says. Tasks on closed leads are excluded outright — winning a
+ * deal should not leave its reminders nagging.
+ */
+export async function followUpQueue(
+  actor: AdminActor | null,
+  filters: QueueFilters = {},
+): Promise<{ items: QueueItem[]; counts: Record<QueueBucket, number>; escalated: number }> {
+  const now = new Date();
+  const edges = dayEdges(now);
+
+  const and: Prisma.LeadFollowUpWhereInput[] = [
+    { status: "PENDING" },
+    { lead: { status: { notIn: [...CLOSED_STATUSES] } } },
+  ];
+
+  if (filters.type) and.push({ type: filters.type });
+
+  if (filters.q?.trim()) {
+    const q = filters.q.trim();
+    and.push({
+      OR: [
+        { title: { contains: q, mode: "insensitive" } },
+        { lead: { name: { contains: q, mode: "insensitive" } } },
+        { lead: { phone: { contains: q } } },
+        { lead: { email: { contains: q, mode: "insensitive" } } },
+      ],
+    });
+  }
+
+  // Ownership last, and not negotiable. A restricted role is pinned to the
+  // leads assigned to it — not merely to tasks assigned to it, because an
+  // unassigned task on their lead is still their work.
+  if (isLeadOwnerOnly(actor?.role)) {
+    and.push({ lead: { assignedToId: actor?.id || "__no_such_user__" } });
+  } else if (filters.owner === "me" && actor?.id) {
+    and.push({ assignedToId: actor.id });
+  } else if (filters.owner === "none") {
+    and.push({ assignedToId: null });
+  } else if (filters.owner) {
+    and.push({ assignedToId: filters.owner });
+  }
+
+  const rows = await prisma.leadFollowUp.findMany({
+    where: { AND: and },
+    select: QUEUE_SELECT,
+    orderBy: { dueAt: "asc" },
+    take: Math.min(Math.max(filters.limit ?? 300, 1), 1000),
+  });
+
+  const counts: Record<QueueBucket, number> = {
+    overdue: 0,
+    today: 0,
+    tomorrow: 0,
+    week: 0,
+    later: 0,
+  };
+  let escalated = 0;
+
+  const items: QueueItem[] = rows.map((row) => {
+    const bucket = bucketFor(row.dueAt, edges);
+    counts[bucket] += 1;
+
+    const late = daysLateFor(row.dueAt, edges);
+    const escalatedRow = isEscalated(row.dueAt, edges);
+    if (escalatedRow) escalated += 1;
+
+    return {
+      ...toRecord(row),
+      bucket,
+      daysLate: late,
+      escalated: escalatedRow,
+      leadName: row.lead.name,
+      leadPhone: row.lead.phone,
+      leadEmail: row.lead.email,
+      leadStatus: row.lead.status,
+      leadScore: row.lead.score,
+      leadScoreBand: row.lead.scoreBand,
+      leadDestination: row.lead.destination,
+    };
+  });
+
+  return {
+    items: filters.bucket ? items.filter((item) => item.bucket === filters.bucket) : items,
+    counts,
+    escalated,
+  };
+}
+
+/**
+ * Pending follow-ups grouped by the person who owns them.
+ *
+ * Feeds the nightly digest. Only tasks that are due — today or earlier — are
+ * returned, because a digest listing next month's work is a digest people
+ * stop opening. Unassigned tasks have nobody to email and are left out; the
+ * queue page surfaces them instead.
+ */
+export async function dueFollowUpsByOwner(now = new Date()) {
+  const { endOfToday, startOfToday } = dayEdges(now);
+
+  const rows = await prisma.leadFollowUp.findMany({
+    where: {
+      status: "PENDING",
+      dueAt: { lte: endOfToday },
+      assignedToId: { not: null },
+      lead: { status: { notIn: [...CLOSED_STATUSES] } },
+    },
+    select: {
+      id: true,
+      dueAt: true,
+      type: true,
+      title: true,
+      leadId: true,
+      lead: { select: { name: true, destination: true } },
+      assignedTo: { select: { id: true, name: true, email: true, isActive: true } },
+    },
+    orderBy: { dueAt: "asc" },
+    take: 2000,
+  });
+
+  const byOwner = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      email: string;
+      overdue: typeof rows;
+      today: typeof rows;
+    }
+  >();
+
+  for (const row of rows) {
+    const owner = row.assignedTo;
+    if (!owner?.isActive || !owner.email) continue;
+
+    const entry =
+      byOwner.get(owner.id) ??
+      { id: owner.id, name: owner.name, email: owner.email, overdue: [], today: [] };
+
+    if (row.dueAt < startOfToday) entry.overdue.push(row);
+    else entry.today.push(row);
+
+    byOwner.set(owner.id, entry);
+  }
+
+  return [...byOwner.values()];
+}
+
+/**
+ * Follow-ups that are badly overdue, whoever owns them.
+ *
+ * A task nobody has touched in three working days is not a busy morning any
+ * more — it is a lead going cold with an owner who has stopped looking. This
+ * is what the manager digest reports, so the escalation reaches someone who
+ * can reassign it.
+ */
+export async function escalatedFollowUps(now = new Date(), limit = 100) {
+  const edges = dayEdges(now);
+  const cutoff = new Date(
+    edges.startOfToday.getTime() - (ESCALATION_DAYS - 1) * 24 * 60 * 60 * 1000,
+  );
+
+  const rows = await prisma.leadFollowUp.findMany({
+    where: {
+      status: "PENDING",
+      dueAt: { lt: cutoff },
+      lead: { status: { notIn: [...CLOSED_STATUSES] } },
+    },
+    select: {
+      id: true,
+      dueAt: true,
+      title: true,
+      type: true,
+      leadId: true,
+      lead: { select: { name: true, destination: true, score: true } },
+      assignedTo: { select: { name: true } },
+    },
+    orderBy: { dueAt: "asc" },
+    take: limit,
+  });
+
+  return rows.map((row) => ({ ...row, daysLate: daysLateFor(row.dueAt, edges) }));
 }

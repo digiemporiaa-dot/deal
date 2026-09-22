@@ -21,7 +21,13 @@ import {
   getComparison,
   getBookingStatusBreakdown,
 } from "@/lib/analytics";
-import { followUpQueue, recentLeads } from "@/lib/services/crm";
+import { recentLeads } from "@/lib/services/crm";
+import {
+  followUpQueue,
+  QUEUE_BUCKETS,
+  BUCKET_LABELS,
+  type QueueItem,
+} from "@/lib/services/follow-up";
 import { listActivity } from "@/lib/activity";
 import { dashboardQuerySchema } from "@/lib/validation";
 import { leadSourceLabel, leadStatusLabel } from "@/lib/crm";
@@ -46,7 +52,7 @@ import {
 } from "@/components/admin/ui";
 import { LineChart, BarList, Funnel, ShareBar, CHART_COLORS } from "@/components/admin/Charts";
 import { DashboardFilters } from "@/components/admin/DashboardFilters";
-import { FollowUpList } from "@/components/admin/FollowUpList";
+import { FollowUpQueue } from "@/components/admin/FollowUpQueue";
 import { leadStatusTone, bookingStatusTone, paymentStatusTone, humanStatus } from "@/lib/admin-status";
 
 export const dynamic = "force-dynamic";
@@ -109,7 +115,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     getTopDestinations(range),
     getConversionFunnel(range),
     getBookingStatusBreakdown(range),
-    canSeeLeads ? followUpQueue(actor, 5) : Promise.resolve({ overdue: [], today: [], upcoming: [] }),
+    canSeeLeads
+      ? followUpQueue(actor, { limit: 30 })
+      : Promise.resolve({ items: [], counts: null, escalated: 0 }),
     canSeeLeads ? recentLeads(actor, 6) : Promise.resolve([]),
     canSeeBookings
       ? prisma.booking.findMany({
@@ -319,17 +327,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
             title="Follow-ups"
             description="Overdue first, then today, then the week ahead"
             action={
-              <Link href="/admin/leads?due=today" className="text-xs font-semibold text-brand-600 hover:underline">
-                Open in CRM
+              <Link href="/admin/follow-ups" className="text-xs font-semibold text-brand-600 hover:underline">
+                Open the queue
               </Link>
             }
             bodyClassName="p-0"
           >
-            <FollowUpList
-              overdue={followUps.overdue.map(serializeFollowUp)}
-              today={followUps.today.map(serializeFollowUp)}
-              upcoming={followUps.upcoming.map(serializeFollowUp)}
-            />
+            <FollowUpQueue variant="compact" groups={followUpGroups(followUps.items)} />
           </SectionCard>
         )}
 
@@ -564,16 +568,40 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   );
 }
 
-/** Dates cross to the client component as ISO strings. */
-function serializeFollowUp(row: {
-  id: string;
-  name: string;
-  phone: string;
-  destination: string | null;
-  status: string;
-  priority: string;
-  nextFollowUpAt: Date;
-  assignedToName: string | null;
-}) {
-  return { ...row, nextFollowUpAt: row.nextFollowUpAt.toISOString() };
+/**
+ * The queue as the card wants it: the three buckets that need acting on now,
+ * dates serialised for the client component.
+ *
+ * "This week" and "Later" are left out on purpose — the dashboard card is for
+ * what to do today, and the full queue at /admin/follow-ups is one click away
+ * for the rest.
+ */
+function followUpGroups(items: QueueItem[]) {
+  const shown = new Set(["overdue", "today", "tomorrow"]);
+  return QUEUE_BUCKETS.filter((bucket) => shown.has(bucket)).map((bucket) => ({
+    bucket,
+    label: BUCKET_LABELS[bucket],
+    items: items
+      .filter((item) => item.bucket === bucket)
+      .slice(0, 6)
+      .map((item) => ({
+        id: item.id,
+        leadId: item.leadId,
+        title: item.title,
+        type: item.type,
+        typeLabel: item.typeLabel,
+        note: item.note,
+        dueAt: item.dueAt.toISOString(),
+        bucket: item.bucket,
+        daysLate: item.daysLate,
+        escalated: item.escalated,
+        assignedToName: item.assignedToName,
+        leadName: item.leadName,
+        leadPhone: item.leadPhone,
+        leadStatus: item.leadStatus,
+        leadScore: item.leadScore,
+        leadScoreBand: item.leadScoreBand,
+        leadDestination: item.leadDestination,
+      })),
+  }));
 }

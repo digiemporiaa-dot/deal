@@ -256,73 +256,12 @@ export async function leadSourceOptions(actor: AdminActor | null): Promise<strin
 
 /* ───────────────────── dashboard widgets ───────────────────── */
 
-export type FollowUpRow = {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  destination: string | null;
-  status: string;
-  priority: string;
-  nextFollowUpAt: Date;
-  assignedToName: string | null;
-};
-
-/**
- * Follow-ups the signed-in user should act on, split by urgency.
- *
- * Scoped like every other lead query: an agent sees their own work, a manager
- * sees the team's. The three buckets come from one query rather than three,
- * because they partition the same small set.
+/*
+ * The follow-up queue used to live here, reading `Lead.nextFollowUpAt`. It
+ * could only ever show one date per lead and had no idea what the follow-up
+ * was for, so it has been replaced by `followUpQueue` in
+ * lib/services/follow-up.ts, which reads the LeadFollowUp tasks themselves.
  */
-export async function followUpQueue(actor: AdminActor | null, limit = 12) {
-  const scope = leadScope(actor);
-  const today = startOfToday();
-  const tomorrow = endOfToday();
-
-  const rows = await prisma.lead.findMany({
-    where: {
-      ...scope,
-      nextFollowUpAt: { not: null, lte: new Date(tomorrow.getTime() + 7 * 24 * 60 * 60 * 1000) },
-      status: { notIn: [...CLOSED_STATUSES] },
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      email: true,
-      destination: true,
-      status: true,
-      priority: true,
-      nextFollowUpAt: true,
-      assignedTo: { select: { name: true } },
-    },
-    orderBy: { nextFollowUpAt: "asc" },
-    take: limit * 3,
-  });
-
-  const mapped: FollowUpRow[] = rows
-    .filter((row): row is typeof row & { nextFollowUpAt: Date } => row.nextFollowUpAt !== null)
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      phone: row.phone,
-      email: row.email,
-      destination: row.destination,
-      status: row.status,
-      priority: row.priority,
-      nextFollowUpAt: row.nextFollowUpAt,
-      assignedToName: row.assignedTo?.name ?? null,
-    }));
-
-  return {
-    overdue: mapped.filter((row) => row.nextFollowUpAt < today).slice(0, limit),
-    today: mapped
-      .filter((row) => row.nextFollowUpAt >= today && row.nextFollowUpAt <= tomorrow)
-      .slice(0, limit),
-    upcoming: mapped.filter((row) => row.nextFollowUpAt > tomorrow).slice(0, limit),
-  };
-}
 
 export type RecentLeadRow = {
   id: string;

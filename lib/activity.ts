@@ -45,6 +45,11 @@ export const ACTIVITY_ENTITIES = [
   "Settings",
   "Seo",
   "Export",
+  // Background jobs. Logging a cron's own work here rather than in a table of
+  // its own gives the digests an audit trail for free — and, because the log
+  // is append-only and queryable, a way to tell whether today's run has
+  // already happened.
+  "Cron",
 ] as const;
 
 export type ActivityEntity = (typeof ACTIVITY_ENTITIES)[number];
@@ -100,6 +105,48 @@ export async function recordActivity(input: ActivityInput): Promise<void> {
     // Never let auditing break the operation it is auditing.
     logger.error("activity.write_failed", { action, entity, entityId, error });
   }
+}
+
+/**
+ * Has this exact job already run today?
+ *
+ * Cron is at-least-once: a retry, a redeploy or a manual trigger can fire the
+ * same schedule twice, and a team member receiving their follow-up digest
+ * twice in ten minutes stops trusting it. `key` identifies the unit of work —
+ * one per recipient, per job, per day — and the append-only log is the record
+ * that it happened.
+ *
+ * Fails open. If the check itself errors, the job runs: a duplicate digest is
+ * a nuisance, a silently skipped one is a lead nobody chases.
+ */
+export async function alreadyRanToday(key: string): Promise<boolean> {
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+
+  try {
+    const existing = await prisma.activityLog.findFirst({
+      where: { entity: "Cron", entityId: key, createdAt: { gte: since } },
+      select: { id: true },
+    });
+    return existing !== null;
+  } catch (error) {
+    logger.error("activity.cron_guard_failed", { key, error });
+    return false;
+  }
+}
+
+/** Record that a background job did a unit of work, for `alreadyRanToday`. */
+export async function recordCronRun(key: string, description: string, metadata?: Record<string, unknown>) {
+  await recordActivity({
+    action: "UPDATE",
+    entity: "Cron",
+    entityId: key,
+    description,
+    metadata,
+    // There is no incoming request behind a scheduled job, so there is no IP
+    // or user agent to capture.
+    captureRequest: false,
+  });
 }
 
 /** Describe what changed between two versions of a record, for `metadata`. */

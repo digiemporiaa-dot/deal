@@ -347,6 +347,10 @@ export function hasAnyPermission(
 export const SECTION_PERMISSIONS: Record<string, Permission[]> = {
   dashboard: ["dashboard:view"],
   leads: ["leads:view"],
+  // The follow-up queue is a view of the lead pipeline, so it carries the
+  // same permission — without this entry an unknown section defaults to
+  // admins only, and the sales roles whose work it is could not open it.
+  "follow-ups": ["leads:view"],
   bookings: ["bookings:view"],
   payments: ["bookings:view"],
   customers: ["customers:view"],

@@ -762,6 +762,7 @@ export async function createLeadFollowUp(input: unknown) {
   await stopSequence(data.leadId);
 
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/follow-ups");
   revalidatePath(`/admin/leads/${data.leadId}`);
   return { ok: true as const, id: created.followUp.id };
 }
@@ -807,6 +808,7 @@ export async function completeLeadFollowUp(input: unknown) {
   }
 
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/follow-ups");
   revalidatePath(`/admin/leads/${result.leadId}`);
   return { ok: true as const, changed: result.changed };
 }
@@ -840,8 +842,106 @@ export async function rescheduleLeadFollowUp(input: unknown) {
   });
 
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/follow-ups");
   revalidatePath(`/admin/leads/${result.leadId}`);
   return { ok: true as const };
+}
+
+/**
+ * Push a follow-up out by a number of days.
+ *
+ * The new date is computed on the server, from the server's clock, rather
+ * than sent by the browser — "tomorrow" has to mean tomorrow, not whatever
+ * a laptop with the wrong date thinks. Snoozing measures from now, not from
+ * the original due date, so snoozing a task that is a week late moves it to
+ * tomorrow rather than to last Tuesday.
+ */
+export async function snoozeLeadFollowUp(id: string, days: number) {
+  const requested = Number(days);
+  if (!Number.isFinite(requested) || requested < 1 || requested > 90) {
+    return { ok: false as const, error: "Pick between 1 and 90 days." };
+  }
+
+  const followUp = await prisma.leadFollowUp.findUnique({
+    where: { id },
+    select: { leadId: true, title: true, status: true },
+  });
+  if (!followUp) return { ok: false as const, error: "Follow-up not found" };
+
+  const guard = await authorizeLead(followUp.leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const when = new Date();
+  when.setDate(when.getDate() + Math.round(requested));
+  when.setHours(10, 0, 0, 0);
+
+  const result = await rescheduleFollowUpTask({ id, dueAt: when });
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  await logActivity({
+    leadId: result.leadId,
+    type: "FOLLOWUP",
+    authorId: guard.actor.id,
+    body: `Moved "${followUp.title}" to ${formatDue(when)}`,
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin/follow-ups");
+  revalidatePath("/admin/follow-ups");
+  revalidatePath(`/admin/leads/${result.leadId}`);
+  return { ok: true as const };
+}
+
+/**
+ * Close several follow-ups at once, from the queue.
+ *
+ * Each one is authorised on its own lead rather than as a batch: the ids come
+ * from the browser, and a restricted role must not be able to clear a
+ * colleague's task by including its id in the list. Tasks the caller may not
+ * touch are skipped and counted, not refused outright — one bad id should not
+ * throw away the rest of the click.
+ */
+export async function completeLeadFollowUps(ids: string[]) {
+  const guard = await guardAction("leads:update");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const unique = [...new Set(ids)].filter(Boolean).slice(0, 100);
+  if (unique.length === 0) return { ok: false as const, error: "Select at least one follow-up" };
+
+  const rows = await prisma.leadFollowUp.findMany({
+    where: {
+      id: { in: unique },
+      status: "PENDING",
+      // Ownership is re-read from the lead, never taken from the request.
+      ...(isLeadOwnerOnly(guard.actor.role) ? { lead: { assignedToId: guard.actor.id } } : {}),
+    },
+    select: { id: true, leadId: true, title: true },
+  });
+
+  let done = 0;
+  for (const row of rows) {
+    const result = await completeFollowUpTask({ id: row.id, status: "DONE" });
+    if (!result.ok || !result.changed) continue;
+    done += 1;
+    await logActivity({
+      leadId: row.leadId,
+      type: "FOLLOWUP",
+      authorId: guard.actor.id,
+      body: `Completed follow-up: ${row.title}`,
+    });
+  }
+
+  await recordActivity({
+    actor: guard.actor,
+    action: "UPDATE",
+    entity: "Lead",
+    description: `Completed ${done} follow-up${done === 1 ? "" : "s"}`,
+    metadata: { done, requested: unique.length },
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin/follow-ups");
+  return { ok: true as const, count: done, skipped: unique.length - done };
 }
 
 /** Remove a follow-up created by mistake. */
@@ -859,6 +959,7 @@ export async function deleteLeadFollowUp(id: string) {
   if (!result.ok) return { ok: false as const, error: result.error };
 
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/follow-ups");
   revalidatePath(`/admin/leads/${result.leadId}`);
   return { ok: true as const };
 }

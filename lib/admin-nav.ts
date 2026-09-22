@@ -67,7 +67,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/leads", label: "Leads", icon: ClipboardList, section: "leads" },
       { href: "/admin/leads/board", label: "Pipeline", icon: LayoutGrid, section: "leads" },
       { href: "/admin/customers", label: "Customers", icon: Users, section: "customers" },
-      { href: "/admin/leads?due=today", label: "Follow-ups", icon: CalendarCheck, section: "leads", exact: true },
+      { href: "/admin/follow-ups", label: "Follow-ups", icon: CalendarCheck, section: "follow-ups" },
     ],
   },
   {
@@ -191,6 +191,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   admin: "Admin",
   dashboard: "Dashboard",
   leads: "Leads",
+  "follow-ups": "Follow-ups",
   customers: "Customers",
   bookings: "Bookings",
   payments: "Payments",
