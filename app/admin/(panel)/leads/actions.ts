@@ -11,7 +11,15 @@ import { leadReplyEmail } from "@/lib/email/lead-email";
 import { leadAssignedEmail } from "@/lib/email/crm-emails";
 import { getSettings } from "@/lib/settings";
 import { isLeadOwnerOnly } from "@/lib/permissions";
-import { LEAD_STATUSES, LEAD_PRIORITIES, leadStatusLabel, normalizePhone, WON_STATUS } from "@/lib/crm";
+import {
+  LEAD_STATUSES,
+  LEAD_PRIORITIES,
+  leadStatusLabel,
+  normalizePhone,
+  parseTags,
+  serializeTags,
+  WON_STATUS,
+} from "@/lib/crm";
 import { rescoreLead } from "@/lib/services/lead-scoring";
 import { convertLeadToCustomer, recordStatusChange } from "@/lib/services/lead-conversion";
 import { findDuplicateLeads } from "@/lib/services/lead-dedupe";
@@ -27,6 +35,7 @@ import {
   followUpSchema,
   completeFollowUpSchema,
   rescheduleFollowUpSchema,
+  leadQualificationSchema,
 } from "@/lib/validation";
 import type { LeadStatus } from "@/types/db-enums";
 
@@ -104,6 +113,13 @@ async function logActivity(input: {
     data: { lastActivityAt: new Date() },
   });
   await rescoreLead(input.leadId);
+}
+
+/** Parse a form date, treating anything unparseable as "not given". */
+function toDateOrNull(value: string | undefined | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /** A human has engaged with this lead — stop the automatic nurture emails. */
@@ -555,6 +571,150 @@ export async function setLeadFollowUp(leadId: string, date: string) {
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${leadId}`);
   return { ok: true as const };
+}
+
+/* ─────────────────────── qualification ─────────────────────── */
+
+/**
+ * Save what the trip actually is.
+ *
+ * This is the qualification step a travel desk does on the phone — which
+ * destination, which package, how many rooms, what kind of trip — and until
+ * now there was nowhere to put most of it. Every field is optional: a
+ * half-qualified lead is normal and must still save.
+ *
+ * `packageId` and `destinationId` arrive from a form, so both are checked
+ * against real rows rather than written straight through; an id that no
+ * longer exists is dropped rather than failing the foreign key. Saving
+ * rescores the lead, because nearly everything here feeds the score.
+ */
+export async function updateLeadQualification(leadId: string, input: unknown) {
+  const guard = await authorizeLead(leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const parsed = leadQualificationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0]?.message || "Check the form." };
+  }
+  const data = parsed.data;
+
+  const current = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { name: true, destination: true, budget: true, tripType: true },
+  });
+  if (!current) return { ok: false as const, error: "Lead not found" };
+
+  // Verified, not trusted: a stale id from a cached form would otherwise
+  // fail at insert time with a foreign-key error the user cannot act on.
+  const pkg = data.packageId
+    ? await prisma.travelPackage.findUnique({
+        where: { id: data.packageId },
+        select: { id: true, destinationId: true },
+      })
+    : null;
+
+  const destinationId = data.destinationId
+    ? (
+        await prisma.destination.findUnique({
+          where: { id: data.destinationId },
+          select: { id: true },
+        })
+      )?.id ?? null
+    : null;
+
+  try {
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: {
+        destination: data.destination || null,
+        // A package implies its destination, so picking one fills the other
+        // in rather than leaving the two able to contradict each other.
+        destinationId: destinationId ?? pkg?.destinationId ?? null,
+        packageId: pkg?.id ?? null,
+        travelDate: toDateOrNull(data.travelDate),
+        returnDate: toDateOrNull(data.returnDate),
+        adults: data.adults ?? null,
+        children: data.children ?? null,
+        rooms: data.rooms ?? null,
+        budget: data.budget || null,
+        tripType: data.tripType || null,
+        ...(data.tags ? { tags: serializeTags(data.tags) } : {}),
+      },
+    });
+
+    await logActivity({
+      leadId,
+      type: "NOTE",
+      authorId: guard.actor.id,
+      body: `Trip details updated by ${guard.actor.name || "an admin"}`,
+    });
+
+    await recordActivity({
+      actor: guard.actor,
+      action: "UPDATE",
+      entity: "Lead",
+      entityId: leadId,
+      description: `Updated trip details on lead "${current.name}"`,
+      metadata: {
+        destination: data.destination || null,
+        packageId: pkg?.id ?? null,
+        tripType: data.tripType || null,
+      },
+    });
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${leadId}`);
+    return { ok: true as const };
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: toSafeError(err, "action.updateLeadQualification", { leadId }).message,
+    };
+  }
+}
+
+/** Replace a lead's tags. Normalising and de-duplicating happens server-side. */
+export async function setLeadTags(leadId: string, tags: unknown) {
+  const guard = await authorizeLead(leadId);
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const parsed = z.array(z.string().trim().max(40)).max(20).safeParse(tags);
+  if (!parsed.success) return { ok: false as const, error: "Those tags are not valid." };
+
+  await prisma.lead.update({
+    where: { id: leadId },
+    data: { tags: serializeTags(parsed.data) },
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${leadId}`);
+  return { ok: true as const, tags: parseTags(serializeTags(parsed.data)) };
+}
+
+/**
+ * Look for existing leads with the same phone or email.
+ *
+ * Called from the new-lead form as the contact details are typed, so the
+ * person sees "you already have this enquiry" before they finish rather than
+ * after they submit. Behind `leads:create`, because knowing which numbers are
+ * already in the CRM is itself information.
+ */
+export async function checkLeadDuplicates(phone: string, email: string) {
+  const guard = await guardAction("leads:create");
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+
+  const result = await findDuplicateLeads({ phone, email, limit: 3 });
+  return {
+    ok: true as const,
+    leads: result.leads.map((row) => ({
+      id: row.id,
+      name: row.name,
+      statusLabel: row.statusLabel,
+      assignedToName: row.assignedToName,
+      matchedOn: row.matchedOn,
+      createdAt: row.createdAt.toISOString(),
+    })),
+  };
 }
 
 /* ─────────────────────── follow-up tasks ─────────────────────── */

@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, LayoutGrid } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requirePermission, currentUser, can } from "@/lib/guard";
 import { canAssignLeads, isLeadOwnerOnly } from "@/lib/permissions";
 import { listLeads, leadPipelineCounts, leadSourceOptions } from "@/lib/services/crm";
+import { leadBandCounts, leadTagOptions } from "@/lib/services/lead-workspace";
 import { leadQuerySchema } from "@/lib/validation";
-import { LEAD_STATUSES, LEAD_PRIORITIES, leadStatusLabel, leadSourceLabel } from "@/lib/crm";
+import {
+  LEAD_STATUSES,
+  LEAD_PRIORITIES,
+  leadStatusLabel,
+  leadSourceLabel,
+  parseTags,
+} from "@/lib/crm";
 import { leadStatusTone, humanStatus } from "@/lib/admin-status";
 import {
   PageHeader,
@@ -18,6 +25,7 @@ import {
 import { Input, Select, FilterLabel } from "@/components/ui/Field";
 import { LeadTable } from "@/components/admin/LeadTable";
 import { NewLeadButton } from "@/components/admin/NewLeadButton";
+import { BandChips } from "@/components/admin/BandChips";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +58,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
     owner: first(raw.owner),
     budget: first(raw.budget),
     due: first(raw.due),
+    band: first(raw.band),
+    tag: first(raw.tag),
+    state: first(raw.state),
     from: first(raw.from),
     to: first(raw.to),
     sort: first(raw.sort) ?? "followup",
@@ -64,11 +75,21 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
   const ownLeadsOnly = isLeadOwnerOnly(actor?.role);
   const mayAssign = canAssignLeads(actor?.role);
 
-  const [{ rows, total, page, pageCount }, counts, sources, members, mayCreate, mayExport] =
-    await Promise.all([
+  const [
+    { rows, total, page, pageCount },
+    counts,
+    sources,
+    bands,
+    tags,
+    members,
+    mayCreate,
+    mayExport,
+  ] = await Promise.all([
       listLeads(query, actor),
       leadPipelineCounts(actor),
       leadSourceOptions(actor),
+      leadBandCounts(actor),
+      leadTagOptions(actor),
       mayAssign
         ? prisma.user.findMany({
             where: { isActive: true },
@@ -89,6 +110,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
     owner: query.owner,
     budget: query.budget,
     due: query.due,
+    band: query.band,
+    tag: query.tag,
+    state: query.state,
     from: query.from || undefined,
     to: query.to || undefined,
     sort: query.sort,
@@ -110,6 +134,10 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         }
         action={
           <>
+            <Link href="/admin/leads/board" className={buttonClasses("outline")}>
+              <LayoutGrid className="h-4 w-4" />
+              Board
+            </Link>
             {mayExport && (
               <Link href="/admin/export" className={buttonClasses("outline")}>
                 <Download className="h-4 w-4" />
@@ -177,6 +205,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
           </p>
         </Link>
       </div>
+
+      <BandChips counts={bands} active={query.band} basePath="/admin/leads" />
 
       {/* Saved views. */}
       <div className="mb-4 flex flex-wrap gap-1.5 text-[13px]">
@@ -268,6 +298,18 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         )}
 
         <div>
+          <FilterLabel htmlFor="tag">Tag</FilterLabel>
+          <Select inputSize="sm" id="tag" name="tag" defaultValue={query.tag ?? ""}>
+            <option value="">Any</option>
+            {tags.map((tag) => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
           <FilterLabel htmlFor="due">Follow-up</FilterLabel>
           <Select inputSize="sm" id="due" name="due" defaultValue={query.due ?? ""}>
             <option value="">All</option>
@@ -308,6 +350,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="activity">Recent activity</option>
+            <option value="score">Lead score</option>
           </Select>
         </div>
 
@@ -341,6 +384,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             assignedToId: lead.assignedToId,
             assignedToName: lead.assignedTo?.name ?? null,
             activityCount: lead._count.notes,
+            score: lead.score,
+            scoreBand: lead.scoreBand,
+            tags: parseTags(lead.tags),
           }))}
           members={members}
           showOwner={!ownLeadsOnly}

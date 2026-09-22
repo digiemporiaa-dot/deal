@@ -92,6 +92,29 @@ describe("isNavItemActive", () => {
     expect(isNavItemActive(leads, "/admin/bookings", "")).toBe(false);
   });
 
+  it("lets a more specific entry win, so only one item reads as current", () => {
+    const board = {
+      href: "/admin/leads/board",
+      label: "Pipeline",
+      icon: null as never,
+      section: "leads",
+    };
+    // /admin/leads/board has its own nav entry, so Leads must stand down.
+    expect(isNavItemActive(board, "/admin/leads/board", "")).toBe(true);
+    expect(isNavItemActive(leads, "/admin/leads/board", "")).toBe(false);
+    // A lead id has no entry of its own, so Leads still covers it.
+    expect(isNavItemActive(leads, "/admin/leads/abc123", "")).toBe(true);
+    expect(isNavItemActive(board, "/admin/leads/abc123", "")).toBe(false);
+  });
+
+  it("stands the parent down on a filtered view that has its own entry", () => {
+    // /admin/leads?due=today IS Follow-ups, so Leads must not also light up.
+    expect(isNavItemActive(followUps, "/admin/leads", "due=today")).toBe(true);
+    expect(isNavItemActive(leads, "/admin/leads", "due=today")).toBe(false);
+    // A query with no entry of its own leaves the parent current.
+    expect(isNavItemActive(leads, "/admin/leads", "status=NEW")).toBe(true);
+  });
+
   it("only lights a filtered view on an exact query match", () => {
     expect(isNavItemActive(followUps, "/admin/leads", "due=today")).toBe(true);
     expect(isNavItemActive(followUps, "/admin/leads", "")).toBe(false);

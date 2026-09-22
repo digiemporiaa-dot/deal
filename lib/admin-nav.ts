@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   IndianRupee,
   LayoutDashboard,
+  LayoutGrid,
   LayoutTemplate,
   MapPin,
   Package,
@@ -64,6 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "CRM",
     items: [
       { href: "/admin/leads", label: "Leads", icon: ClipboardList, section: "leads" },
+      { href: "/admin/leads/board", label: "Pipeline", icon: LayoutGrid, section: "leads" },
       { href: "/admin/customers", label: "Customers", icon: Users, section: "customers" },
       { href: "/admin/leads?due=today", label: "Follow-ups", icon: CalendarCheck, section: "leads", exact: true },
     ],
@@ -132,12 +134,37 @@ export function navigationFor(role: string | undefined | null): NavGroup[] {
   })).filter((group) => group.items.length > 0);
 }
 
+const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
+
+/** Every plain path in the navigation, longest first. */
+const NAV_PATHS: string[] = ALL_NAV_ITEMS.map((item) => item.href.split("?")[0])
+  .filter((path, index, all) => all.indexOf(path) === index)
+  .sort((a, b) => b.length - a.length);
+
+/** The hrefs that carry a query string, as `path?query`. */
+const NAV_FILTERED: string[] = ALL_NAV_ITEMS.map((item) => item.href).filter((href) =>
+  href.includes("?"),
+);
+
 /**
  * Whether a nav item should read as current.
  *
- * Items that carry a query string (Follow-ups, Upcoming trips) are filtered
- * views of another page, so they only light up on an exact match — otherwise
- * opening Leads would highlight both Leads and Follow-ups.
+ * Two rules, both there to stop more than one item lighting up at once:
+ *
+ *   Items that carry a query string (Follow-ups, Upcoming trips) are filtered
+ *   views of another page, so they only match exactly — otherwise opening
+ *   Leads would highlight Follow-ups too.
+ *
+ *   An item matched by prefix stands down if a *longer* nav path also matches.
+ *   /admin/leads is the parent of /admin/leads/[id], and should light up for
+ *   it — but /admin/leads/board is its own entry, and without this both it and
+ *   Leads would read as current.
+ *
+ *   A plain item stands down when the current URL is exactly a filtered entry
+ *   of its own — on /admin/leads?due=today the current item is Follow-ups,
+ *   not Leads.
+ *
+ * Between them, exactly one item reads as current for any admin URL.
  */
 export function isNavItemActive(item: NavItem, pathname: string, search: string): boolean {
   const [path, query] = item.href.split("?");
@@ -145,7 +172,18 @@ export function isNavItemActive(item: NavItem, pathname: string, search: string)
   if (query) return pathname === path && search === query;
   if (item.exact) return pathname === path && !search;
 
-  return pathname === path || pathname.startsWith(`${path}/`);
+  // A filtered view of this very page is showing, and it has its own entry —
+  // so that entry is the current one, not this parent.
+  if (search && NAV_FILTERED.includes(`${pathname}?${search}`)) return false;
+
+  if (pathname === path) return true;
+  if (!pathname.startsWith(`${path}/`)) return false;
+
+  // NAV_PATHS is longest first, so the first match is the most specific one.
+  const best = NAV_PATHS.find(
+    (candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`),
+  );
+  return best === path;
 }
 
 /** Human labels for path segments, used to build breadcrumbs. */

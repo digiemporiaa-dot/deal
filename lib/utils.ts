@@ -36,6 +36,20 @@ export function formatDate(date: Date | string): string {
 }
 
 /** Generate a human-friendly booking reference, e.g. VD-20260808-4821. */
+/**
+ * A date as the `YYYY-MM-DD` an `<input type="date">` wants.
+ *
+ * Lives here rather than beside the form that uses it because a server
+ * component has to call it too when it builds that form's initial values —
+ * and a function exported from a `"use client"` module cannot be called on
+ * the server, only rendered.
+ */
+export function dateInputValue(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
 export function generateBookingNumber(): string {
   const d = new Date();
   const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(

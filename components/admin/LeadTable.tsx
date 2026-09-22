@@ -20,6 +20,7 @@ import { useToast } from "@/components/admin/Toast";
 import { LeadDrawer } from "@/components/admin/LeadDrawer";
 import { useRowDrawer } from "@/components/admin/RowDrawerTable";
 import { LEAD_STATUSES, leadStatusLabel, leadSourceLabel, isClosedStatus } from "@/lib/crm";
+import { ScorePill } from "@/components/admin/LeadScoreCard";
 import { leadStatusTone, priorityTone, humanStatus } from "@/lib/admin-status";
 import { bulkUpdateLeadStatus, bulkAssignLeads } from "@/app/admin/(panel)/leads/actions";
 import { cn, formatDate } from "@/lib/utils";
@@ -57,6 +58,9 @@ export type LeadRow = {
   assignedToId: string | null;
   assignedToName: string | null;
   activityCount: number;
+  score: number;
+  scoreBand: string;
+  tags: string[];
 };
 
 export function LeadTable({
@@ -208,6 +212,7 @@ export function LeadTable({
                 className="h-3.5 w-3.5 rounded border-admin-border-strong text-brand-600 focus:ring-brand-500"
               />
             </Th>
+            <Th className="w-14">Score</Th>
             <Th>Lead</Th>
             <Th>Contact</Th>
             <Th>Trip</Th>
@@ -264,6 +269,10 @@ export function LeadTable({
                 </Td>
 
                 <Td>
+                  <ScorePill score={lead.score} band={lead.scoreBand} />
+                </Td>
+
+                <Td>
                   <span className="flex items-center gap-2.5">
                     <Avatar name={lead.name} size="sm" />
                     <span className="min-w-0">
@@ -281,6 +290,23 @@ export function LeadTable({
                       <span className="block text-[11px] text-admin-text-subtle">
                         {lead.activityCount} {lead.activityCount === 1 ? "activity" : "activities"}
                       </span>
+                      {lead.tags.length > 0 && (
+                        <span className="mt-0.5 flex flex-wrap gap-1">
+                          {lead.tags.slice(0, 2).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-admin-muted px-1.5 text-[10px] font-medium text-admin-text-muted"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {lead.tags.length > 2 && (
+                            <span className="text-[10px] text-admin-text-subtle">
+                              +{lead.tags.length - 2}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </span>
                   </span>
                 </Td>

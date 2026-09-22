@@ -7,7 +7,11 @@ import { Modal } from "@/components/admin/overlay";
 import { buttonClasses } from "@/components/admin/ui";
 import { Input, Select, Textarea } from "@/components/ui/Field";
 import { useToast } from "@/components/admin/Toast";
-import { createLead } from "@/app/admin/(panel)/leads/actions";
+import { createLead, checkLeadDuplicates } from "@/app/admin/(panel)/leads/actions";
+import {
+  LeadDuplicateWarning,
+  type DuplicateSummary,
+} from "@/components/admin/LeadDuplicateWarning";
 import { LEAD_PRIORITIES } from "@/lib/crm";
 import { humanStatus } from "@/lib/admin-status";
 
@@ -36,6 +40,40 @@ export function NewLeadButton({
   const [open, setOpen] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [duplicates, setDuplicates] = React.useState<DuplicateSummary[]>([]);
+  const [contact, setContact] = React.useState({ phone: "", email: "" });
+
+  /**
+   * Look for an existing enquiry as the contact details are typed.
+   *
+   * Debounced, because it runs on every keystroke and a phone number is ten
+   * of them. The result is advisory only — nothing here blocks the form — so
+   * a failed lookup is swallowed rather than shown as an error the person
+   * cannot act on.
+   */
+  React.useEffect(() => {
+    const phone = contact.phone.replace(/\D/g, "");
+    const email = contact.email.trim();
+    if (phone.length < 6 && !email.includes("@")) {
+      setDuplicates([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkLeadDuplicates(contact.phone, email);
+        if (!cancelled && result.ok) setDuplicates(result.leads);
+      } catch {
+        // Advisory only.
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [contact]);
 
   // The Create menu links to ?new=1; consume it so refreshing does not reopen.
   React.useEffect(() => {
@@ -52,6 +90,8 @@ export function NewLeadButton({
     if (pending) return;
     setOpen(false);
     setError(null);
+    setDuplicates([]);
+    setContact({ phone: "", email: "" });
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -80,8 +120,14 @@ export function NewLeadButton({
         return;
       }
 
-      toast.success("Lead added.");
+      toast.success(
+        result.duplicates.length > 0
+          ? "Lead added — flagged as a possible duplicate."
+          : "Lead added.",
+      );
       setOpen(false);
+      setDuplicates([]);
+      setContact({ phone: "", email: "" });
       // Land straight in the new lead's drawer, ready to log the call.
       // No refresh after this: a push already fetches the page from the
       // server, and a refresh on top of it cancels the navigation.
@@ -115,15 +161,36 @@ export function NewLeadButton({
             </p>
           )}
 
+          {/* Shown, never enforced: a repeat customer is good news, and the
+              point is that whoever takes this call knows who already has it. */}
+          <LeadDuplicateWarning duplicates={duplicates} compact />
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Name" required>
               <Input inputSize="sm" name="name" required autoFocus placeholder="Customer name" />
             </Field>
             <Field label="Phone" required>
-              <Input inputSize="sm" name="phone" required placeholder="+91…" inputMode="tel" />
+              <Input
+                inputSize="sm"
+                name="phone"
+                required
+                placeholder="+91…"
+                inputMode="tel"
+                onChange={(event) =>
+                  setContact((current) => ({ ...current, phone: event.target.value }))
+                }
+              />
             </Field>
             <Field label="Email">
-              <Input inputSize="sm" name="email" type="email" placeholder="Optional" />
+              <Input
+                inputSize="sm"
+                name="email"
+                type="email"
+                placeholder="Optional"
+                onChange={(event) =>
+                  setContact((current) => ({ ...current, email: event.target.value }))
+                }
+              />
             </Field>
             <Field label="Destination">
               <Input inputSize="sm" name="destination" placeholder="e.g. Kashmir" />
